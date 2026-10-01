@@ -9,6 +9,7 @@ Expo SDK 57 requires Node 22.13 or newer.
 ```bash
 cp .env.example .env
 npm install
+npm test
 npm run web
 ```
 
@@ -32,7 +33,7 @@ The client Firebase configuration is intentionally public. Access control belong
 
 ## Current product flows
 
-- Explore listings with search and category filters.
+- Explore listings with search, category and price filters, and sorting.
 - Browse and search without signing in; Google sign-in is required to contact sellers or publish listings.
 - Save and unsave listings.
 - Open a listing detail view and start a seller conversation.
