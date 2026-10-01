@@ -5,7 +5,6 @@ import {
   getRedirectResult,
   onAuthStateChanged,
   setPersistence,
-  signInAnonymously,
   signInWithPopup,
   signInWithRedirect,
   signOut,
@@ -21,7 +20,7 @@ import {
   serverTimestamp,
   setDoc,
 } from "firebase/firestore";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -35,6 +34,7 @@ import {
   View,
 } from "react-native";
 import { EmptyState } from "./components/EmptyState";
+import { GoogleSignInButton } from "./components/GoogleSignInButton";
 import { SellForm, SellFormValues } from "./components/SellForm";
 import { ListingFormModal } from "./components/ListingFormModal";
 import { SoldBadge } from "./components/SoldBadge";
@@ -106,7 +106,9 @@ export default function App() {
     if (!firebaseAuth) return;
     const handleUser = (nextUser: User | null) => {
       setUser(nextUser);
-      if (nextUser)
+      if (nextUser) {
+        setAuthOpen(false);
+        setAuthError("");
         registerUser(nextUser)
           .then(() => setProfileReady(true))
           .catch((error) =>
@@ -116,14 +118,16 @@ export default function App() {
                 : "Could not create profile.",
             ),
           );
-      else setProfileReady(false);
+      } else setProfileReady(false);
     };
-    let unsubscribe: () => void = () => undefined;
-    setPersistence(firebaseAuth, browserLocalPersistence)
-      .then(() => {
-        unsubscribe = onAuthStateChanged(firebaseAuth, handleUser);
-        return getRedirectResult(firebaseAuth);
-      })
+    const unsubscribe = onAuthStateChanged(firebaseAuth, handleUser);
+    const restoreRedirect =
+      Platform.OS === "web"
+        ? setPersistence(firebaseAuth, browserLocalPersistence).then(() =>
+            getRedirectResult(firebaseAuth),
+          )
+        : Promise.resolve(null);
+    restoreRedirect
       .then((result) => {
         if (result?.user) handleUser(result.user);
       })
@@ -134,7 +138,7 @@ export default function App() {
             : "Google sign-in could not be completed.",
         ),
       );
-    return () => unsubscribe();
+    return unsubscribe;
   }, []);
 
   useEffect(() => {
@@ -188,9 +192,6 @@ export default function App() {
         await registerUser(result.user);
         setUser(result.user);
         setProfileReady(true);
-        setAuthOpen(false);
-      } else {
-        await signInAnonymously(auth);
         setAuthOpen(false);
       }
     } catch (error) {
@@ -283,6 +284,12 @@ export default function App() {
     );
     setEditOpen(false);
   };
+  const completeNativeGoogleSignIn = useCallback(async (nextUser: User) => {
+    await registerUser(nextUser);
+    setUser(nextUser);
+    setProfileReady(true);
+    setAuthOpen(false);
+  }, []);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -371,6 +378,8 @@ export default function App() {
         visible={authOpen}
         onClose={() => setAuthOpen(false)}
         onSignIn={signInWithGoogle}
+        onNativeSuccess={completeNativeGoogleSignIn}
+        onError={setAuthError}
         error={authError}
       />
       <SellForm
@@ -567,11 +576,15 @@ function AuthModal({
   visible,
   onClose,
   onSignIn,
+  onNativeSuccess,
+  onError,
   error,
 }: {
   visible: boolean;
   onClose: () => void;
   onSignIn: () => Promise<void>;
+  onNativeSuccess: (user: User) => Promise<void>;
+  onError: (message: string) => void;
   error: string;
 }) {
   return (
@@ -584,10 +597,17 @@ function AuthModal({
             items.
           </Text>
           {error ? <Text style={styles.authError}>{error}</Text> : null}
-          <Pressable style={styles.googleButton} onPress={onSignIn}>
-            <Text style={styles.googleMark}>G</Text>
-            <Text style={styles.outlineText}>Continue with Google</Text>
-          </Pressable>
+          {Platform.OS === "web" ? (
+            <Pressable style={styles.googleButton} onPress={onSignIn}>
+              <Text style={styles.googleMark}>G</Text>
+              <Text style={styles.outlineText}>Continue with Google</Text>
+            </Pressable>
+          ) : (
+            <GoogleSignInButton
+              onSuccess={onNativeSuccess}
+              onError={onError}
+            />
+          )}
           <Pressable style={styles.outline} onPress={onClose}>
             <Text style={styles.outlineText}>Maybe later</Text>
           </Pressable>

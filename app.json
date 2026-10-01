@@ -2,6 +2,7 @@
   "expo": {
     "name": "campus-marketplace",
     "slug": "campus-marketplace",
+    "scheme": "com.nsayoo.campusmarketplace",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -11,6 +12,8 @@
       "bundleIdentifier": "com.nsayoo.campus-marketplace"
     },
     "android": {
+      "package": "com.nsayoo.campusmarketplace",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
