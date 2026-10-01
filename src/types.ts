@@ -1,3 +1,5 @@
+import { Timestamp } from "firebase/firestore";
+
 export type Listing = {
   id: string;
   title: string;
@@ -9,6 +11,9 @@ export type Listing = {
   condition: string;
   image: string;
   description?: string;
+  status: "available" | "sold";
+  soldAt?: Timestamp | null;
+  updatedAt?: Timestamp;
 };
 
 export type Tab = "Explore" | "Saved" | "Messages" | "Profile" | "MyListings";
