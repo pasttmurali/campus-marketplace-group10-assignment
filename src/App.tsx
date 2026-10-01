@@ -23,6 +23,7 @@ import {
 } from "firebase/firestore";
 import { useEffect, useMemo, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Image,
   Modal,
@@ -36,6 +37,8 @@ import {
   View,
 } from "react-native";
 import { EmptyState } from "./components/EmptyState";
+import { ListingFormModal } from "./components/ListingFormModal";
+import { SoldBadge } from "./components/SoldBadge";
 import { ExplorePage } from "./pages/ExplorePage";
 import { MessagesPage } from "./pages/MessagesPage";
 import { MyListingsPage } from "./pages/MyListingsPage";
@@ -43,6 +46,12 @@ import { ProfilePage } from "./pages/ProfilePage";
 import { SavedPage } from "./pages/SavedPage";
 import { seedListings } from "./data";
 import { auth, db, firebaseConfigured } from "./firebase";
+import {
+  getDemoListings,
+  normalizeListing,
+  updateListing,
+  setListingStatus,
+} from "./listings";
 import { Listing, Tab } from "./types";
 
 async function registerUser(user: User) {
@@ -62,9 +71,22 @@ async function registerUser(user: User) {
   );
 }
 
+async function confirmStatusChange(nextStatus: Listing["status"]): Promise<boolean> {
+  const action = nextStatus === "sold" ? "mark this item as sold" : "mark this item as available";
+  if (Platform.OS === "web") {
+    return window.confirm(`Are you sure you want to ${action}?`);
+  }
+  return new Promise((resolve) => {
+    Alert.alert("Update listing status", `Are you sure you want to ${action}?`, [
+      { text: "Cancel", style: "cancel", onPress: () => resolve(false) },
+      { text: "Confirm", onPress: () => resolve(true) },
+    ]);
+  });
+}
+
 export default function App() {
   const [tab, setTab] = useState<Tab>("Explore");
-  const [items, setItems] = useState(seedListings);
+  const [items, setItems] = useState(getDemoListings);
   const [queryText, setQueryText] = useState("");
   const [category, setCategory] = useState("All items");
   const [savedIds, setSavedIds] = useState<string[]>([]);
@@ -72,6 +94,7 @@ export default function App() {
   const [user, setUser] = useState<User | null>(auth?.currentUser || null);
   const [authOpen, setAuthOpen] = useState(false);
   const [sellOpen, setSellOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
   const [authError, setAuthError] = useState("");
   const [profileReady, setProfileReady] = useState(false);
 
@@ -122,12 +145,12 @@ export default function App() {
       (snapshot) =>
         setItems(
           snapshot.empty
-            ? seedListings
+            ? getDemoListings()
             : snapshot.docs.map(
-                (entry) => ({ id: entry.id, ...entry.data() }) as Listing,
+                (entry) => normalizeListing({ id: entry.id, ...entry.data() }),
               ),
         ),
-      () => setItems(seedListings),
+      () => setItems(getDemoListings()),
     );
   }, []);
 
@@ -199,6 +222,7 @@ export default function App() {
       condition: "Good condition",
       image: seedListings[0].image,
       description: "New listing from a campus seller.",
+      status: "available",
       createdAt: serverTimestamp(),
     });
     setSellOpen(false);
@@ -210,6 +234,46 @@ export default function App() {
     }
     setSelected(null);
     setTab("Messages");
+  };
+  const changeListingStatus = async (
+    id: string,
+    status: Listing["status"],
+  ) => {
+    await setListingStatus(id, status);
+    setItems((current) =>
+      current.map((item) => (item.id === id ? { ...item, status } : item)),
+    );
+    setSelected((current) =>
+      current?.id === id ? { ...current, status } : current,
+    );
+  };
+  const saveListingEdits = async (
+    title: string,
+    price: string,
+    listingCategory: string,
+  ) => {
+    if (!selected || !user || selected.sellerId !== user.uid) {
+      throw new Error("You can't edit this listing.");
+    }
+    await updateListing(selected.id, {
+      title,
+      price: Number(price),
+      category: listingCategory,
+    });
+    const updatedFields = {
+      title,
+      price: Number(price),
+      category: listingCategory,
+    };
+    setItems((current) =>
+      current.map((item) =>
+        item.id === selected.id ? { ...item, ...updatedFields } : item,
+      ),
+    );
+    setSelected((current) =>
+      current?.id === selected.id ? { ...current, ...updatedFields } : current,
+    );
+    setEditOpen(false);
   };
 
   return (
@@ -270,6 +334,18 @@ export default function App() {
         user={user}
         onClose={() => setSelected(null)}
         onContact={contactSeller}
+        onStatusChange={changeListingStatus}
+        onEdit={() => setEditOpen(true)}
+      />
+      <ListingFormModal
+        visible={editOpen}
+        onClose={() => setEditOpen(false)}
+        onSubmit={saveListingEdits}
+        initialListing={selected}
+        heading="Edit listing"
+        submitLabel="Save changes"
+        canEdit={Boolean(selected && user?.uid === selected.sellerId)}
+        blockedMessage="You can't edit this listing"
       />
       <AuthModal
         visible={authOpen}
@@ -277,10 +353,12 @@ export default function App() {
         onSignIn={signInWithGoogle}
         error={authError}
       />
-      <SellModal
+      <ListingFormModal
         visible={sellOpen}
         onClose={() => setSellOpen(false)}
         onSubmit={publish}
+        heading="Sell an item"
+        submitLabel="Publish listing"
       />
     </SafeAreaView>
   );
@@ -357,12 +435,43 @@ function ListingModal({
   user,
   onClose,
   onContact,
+  onStatusChange,
+  onEdit,
 }: {
   item: Listing | null;
   user: User | null;
   onClose: () => void;
   onContact: () => void;
+  onStatusChange: (id: string, status: Listing["status"]) => Promise<void>;
+  onEdit: () => void;
 }) {
+  const [savingStatus, setSavingStatus] = useState(false);
+  const [statusError, setStatusError] = useState("");
+  const isOwner = Boolean(item && user?.uid === item.sellerId);
+
+  useEffect(() => {
+    setSavingStatus(false);
+    setStatusError("");
+  }, [item?.id]);
+
+  const handleStatusChange = async () => {
+    if (!item || !isOwner || savingStatus) return;
+    const nextStatus: Listing["status"] =
+      item.status === "sold" ? "available" : "sold";
+    if (!(await confirmStatusChange(nextStatus))) return;
+    setSavingStatus(true);
+    setStatusError("");
+    try {
+      await onStatusChange(item.id, nextStatus);
+    } catch (error) {
+      setStatusError(
+        error instanceof Error ? error.message : "Could not update listing.",
+      );
+    } finally {
+      setSavingStatus(false);
+    }
+  };
+
   return (
     <Modal
       visible={item !== null}
@@ -373,7 +482,14 @@ function ListingModal({
       {item && (
         <View style={styles.backdrop}>
           <View style={styles.detail}>
-            <Image source={{ uri: item.image }} style={styles.detailImage} />
+            <Image
+              source={{ uri: item.image }}
+              style={[
+                styles.detailImage,
+                item.status === "sold" && styles.soldDetailImage,
+              ]}
+            />
+            {item.status === "sold" ? <SoldBadge /> : null}
             <Pressable style={styles.close} onPress={onClose}>
               <Text style={styles.closeText}>×</Text>
             </Pressable>
@@ -387,13 +503,41 @@ function ListingModal({
                 {item.condition} · {item.campus} · {item.seller}
               </Text>
               <Text style={styles.description}>{item.description}</Text>
-              <Pressable style={styles.primary} onPress={onContact}>
-                <Text style={styles.primaryText}>
-                  {user
-                    ? `Message ${item.seller}`
-                    : "Sign in to contact seller"}
-                </Text>
-              </Pressable>
+              {isOwner ? (
+                <View>
+                  <Pressable style={styles.outline} onPress={onEdit}>
+                    <Text style={styles.outlineText}>Edit listing</Text>
+                  </Pressable>
+                  <Pressable
+                    disabled={savingStatus}
+                    style={[styles.outline, savingStatus && styles.disabled]}
+                    onPress={handleStatusChange}
+                  >
+                    {savingStatus ? (
+                      <ActivityIndicator color="#1F5D4C" />
+                    ) : (
+                      <Text style={styles.outlineText}>
+                        {item.status === "sold"
+                          ? "Mark as available"
+                          : "Mark as sold"}
+                      </Text>
+                    )}
+                  </Pressable>
+                </View>
+              ) : item.status === "sold" ? (
+                <Text style={styles.soldMessage}>This item has been sold</Text>
+              ) : (
+                <Pressable style={styles.primary} onPress={onContact}>
+                  <Text style={styles.primaryText}>
+                    {user
+                      ? `Message ${item.seller}`
+                      : "Sign in to contact seller"}
+                  </Text>
+                </Pressable>
+              )}
+              {statusError ? (
+                <Text style={styles.statusError}>{statusError}</Text>
+              ) : null}
             </View>
           </View>
         </View>
@@ -434,56 +578,6 @@ function AuthModal({
     </Modal>
   );
 }
-function SellModal({
-  visible,
-  onClose,
-  onSubmit,
-}: {
-  visible: boolean;
-  onClose: () => void;
-  onSubmit: (title: string, price: string, category: string) => Promise<void>;
-}) {
-  const [title, setTitle] = useState("");
-  const [price, setPrice] = useState("");
-  const [category, setCategory] = useState("Textbooks");
-  return (
-    <Modal visible={visible} transparent animationType="slide">
-      <View style={styles.backdrop}>
-        <View style={styles.form}>
-          <View style={styles.formHeader}>
-            <Text style={styles.formTitle}>Sell an item</Text>
-            <Pressable onPress={onClose}>
-              <Text style={styles.closeText}>×</Text>
-            </Pressable>
-          </View>
-          <Text style={styles.label}>What are you selling?</Text>
-          <TextInput
-            value={title}
-            onChangeText={setTitle}
-            placeholder="e.g. Organic Chemistry textbook"
-            style={styles.field}
-          />
-          <Text style={styles.label}>Price</Text>
-          <TextInput
-            value={price}
-            onChangeText={setPrice}
-            keyboardType="numeric"
-            placeholder="$ 0"
-            style={styles.field}
-          />
-          <Pressable
-            disabled={!title || !price}
-            style={[styles.primary, (!title || !price) && styles.disabled]}
-            onPress={() => onSubmit(title, price, category)}
-          >
-            <Text style={styles.primaryText}>Publish listing</Text>
-          </Pressable>
-        </View>
-      </View>
-    </Modal>
-  );
-}
-
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F8F8F4" },
   nav: {
@@ -537,6 +631,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   detailImage: { width: "100%", height: 230 },
+  soldDetailImage: { opacity: 0.62 },
   close: {
     position: "absolute",
     top: 14,
@@ -574,6 +669,20 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 21,
     marginVertical: 20,
+  },
+  soldMessage: {
+    color: "#B64950",
+    backgroundColor: "#FBECEE",
+    borderRadius: 10,
+    padding: 12,
+    textAlign: "center",
+    fontWeight: "700",
+  },
+  statusError: {
+    color: "#B64950",
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 12,
   },
   primary: {
     height: 50,

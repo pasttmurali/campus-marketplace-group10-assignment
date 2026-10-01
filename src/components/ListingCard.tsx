@@ -1,4 +1,5 @@
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { SoldBadge } from "./SoldBadge";
 import { Listing } from "../types";
 
 export function ListingCard({
@@ -15,7 +16,11 @@ export function ListingCard({
   return (
     <Pressable style={styles.card} onPress={onOpen}>
       <View style={styles.photo}>
-        <Image source={{ uri: item.image }} style={styles.image} />
+        <Image
+          source={{ uri: item.image }}
+          style={[styles.image, item.status === "sold" && styles.soldImage]}
+        />
+        {item.status === "sold" ? <SoldBadge /> : null}
         <Pressable
           accessibilityLabel={saved ? "Remove saved item" : "Save item"}
           style={styles.save}
@@ -53,6 +58,7 @@ const styles = StyleSheet.create({
   },
   photo: { height: 148, backgroundColor: "#E5ECE5" },
   image: { width: "100%", height: "100%" },
+  soldImage: { opacity: 0.62 },
   save: {
     position: "absolute",
     top: 10,

@@ -19,6 +19,7 @@ export const seedListings: Listing[] = [
     condition: "Like new",
     image: "https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=800",
     description: "Barely used and ready for your next math class.",
+    status: "available",
   },
   {
     id: "2",
@@ -30,6 +31,7 @@ export const seedListings: Listing[] = [
     condition: "Good condition",
     image: "https://images.unsplash.com/photo-1518455027359-f3f8164ba6bd?w=800",
     description: "Solid walnut desk with room for a monitor and books.",
+    status: "available",
   },
   {
     id: "3",
@@ -41,6 +43,7 @@ export const seedListings: Listing[] = [
     condition: "Like new",
     image: "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800",
     description: "Wireless headphones with case and charging cable.",
+    status: "available",
   },
   {
     id: "4",
@@ -52,5 +55,6 @@ export const seedListings: Listing[] = [
     condition: "Good condition",
     image: "https://images.unsplash.com/photo-1551488831-00ddcb6c6bd3?w=800",
     description: "A warm, classic layer with a relaxed fit.",
+    status: "available",
   },
 ];
