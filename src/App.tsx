@@ -43,7 +43,8 @@ import { ProfilePage } from "./pages/ProfilePage";
 import { SavedPage } from "./pages/SavedPage";
 import { seedListings } from "./data";
 import { auth, db, firebaseConfigured } from "./firebase";
-import { Listing, Tab } from "./types";
+import { Listing, ListingSortOrder, Tab } from "./types";
+import { filterListings } from "./utils/filterListings";
 
 async function registerUser(user: User) {
   if (!db) return;
@@ -67,6 +68,9 @@ export default function App() {
   const [items, setItems] = useState(seedListings);
   const [queryText, setQueryText] = useState("");
   const [category, setCategory] = useState("All items");
+  const [minPrice, setMinPrice] = useState("");
+  const [maxPrice, setMaxPrice] = useState("");
+  const [sortOrder, setSortOrder] = useState<ListingSortOrder>("newest");
   const [savedIds, setSavedIds] = useState<string[]>([]);
   const [selected, setSelected] = useState<Listing | null>(null);
   const [user, setUser] = useState<User | null>(auth?.currentUser || null);
@@ -131,14 +135,16 @@ export default function App() {
     );
   }, []);
 
-  const filteredItems = useMemo(
+  const filterResult = useMemo(
     () =>
-      items.filter(
-        (item) =>
-          (category === "All items" || item.category === category) &&
-          item.title.toLowerCase().includes(queryText.toLowerCase()),
-      ),
-    [category, items, queryText],
+      filterListings(items, {
+        query: queryText,
+        category,
+        minPrice,
+        maxPrice,
+        sortOrder,
+      }),
+    [category, items, maxPrice, minPrice, queryText, sortOrder],
   );
   const myListings = useMemo(
     () => (user ? items.filter((item) => item.sellerId === user.uid) : []),
@@ -217,12 +223,24 @@ export default function App() {
       <StatusBar style="dark" />
       {tab === "Explore" && (
         <ExplorePage
-          items={filteredItems}
+          items={filterResult.listings}
           query={queryText}
           category={category}
+          minPrice={minPrice}
+          maxPrice={maxPrice}
+          sortOrder={sortOrder}
+          filterError={filterResult.error}
           savedIds={savedIds}
           onQueryChange={setQueryText}
           onCategoryChange={setCategory}
+          onMinPriceChange={setMinPrice}
+          onMaxPriceChange={setMaxPrice}
+          onSortOrderChange={setSortOrder}
+          onResetFilters={() => {
+            setMinPrice("");
+            setMaxPrice("");
+            setSortOrder("newest");
+          }}
           onSave={toggleSaved}
           onOpen={setSelected}
           onProfile={() => setTab("Profile")}

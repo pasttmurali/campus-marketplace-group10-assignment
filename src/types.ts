@@ -9,6 +9,9 @@ export type Listing = {
   condition: string;
   image: string;
   description?: string;
+  createdAt?: Date | string | number | { toMillis: () => number } | null;
 };
+
+export type ListingSortOrder = "newest" | "price-asc" | "price-desc";
 
 export type Tab = "Explore" | "Saved" | "Messages" | "Profile" | "MyListings";
