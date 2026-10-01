@@ -29,13 +29,12 @@ import {
   Platform,
   Pressable,
   SafeAreaView,
-  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import { EmptyState } from "./components/EmptyState";
+import { SellForm, SellFormValues } from "./components/SellForm";
 import { ExplorePage } from "./pages/ExplorePage";
 import { MessagesPage } from "./pages/MessagesPage";
 import { MyListingsPage } from "./pages/MyListingsPage";
@@ -179,26 +178,29 @@ export default function App() {
       Alert.alert("Google sign-in failed", code);
     }
   };
-  const publish = async (
-    title: string,
-    price: string,
-    listingCategory: string,
-  ) => {
+  const publish = async (draft: SellFormValues) => {
     if (!user) {
       setSellOpen(false);
       setAuthOpen(true);
       return;
     }
-    await addDoc(collection(db!, "listings"), {
-      title,
-      price: Number(price),
-      category: listingCategory,
+    if (!db) {
+      Alert.alert(
+        "Cannot publish",
+        "Firebase is not configured, so this listing cannot be saved.",
+      );
+      return;
+    }
+    await addDoc(collection(db, "listings"), {
+      title: draft.title.trim(),
+      price: Number(draft.price),
+      category: draft.category,
       seller: user.displayName || user.email || "You",
       sellerId: user.uid,
-      campus: "North Campus",
-      condition: "Good condition",
-      image: seedListings[0].image,
-      description: "New listing from a campus seller.",
+      campus: draft.campus,
+      condition: draft.condition,
+      image: draft.image.trim() || seedListings[0].image,
+      description: draft.description.trim(),
       createdAt: serverTimestamp(),
     });
     setSellOpen(false);
@@ -277,7 +279,7 @@ export default function App() {
         onSignIn={signInWithGoogle}
         error={authError}
       />
-      <SellModal
+      <SellForm
         visible={sellOpen}
         onClose={() => setSellOpen(false)}
         onSubmit={publish}
@@ -434,56 +436,6 @@ function AuthModal({
     </Modal>
   );
 }
-function SellModal({
-  visible,
-  onClose,
-  onSubmit,
-}: {
-  visible: boolean;
-  onClose: () => void;
-  onSubmit: (title: string, price: string, category: string) => Promise<void>;
-}) {
-  const [title, setTitle] = useState("");
-  const [price, setPrice] = useState("");
-  const [category, setCategory] = useState("Textbooks");
-  return (
-    <Modal visible={visible} transparent animationType="slide">
-      <View style={styles.backdrop}>
-        <View style={styles.form}>
-          <View style={styles.formHeader}>
-            <Text style={styles.formTitle}>Sell an item</Text>
-            <Pressable onPress={onClose}>
-              <Text style={styles.closeText}>×</Text>
-            </Pressable>
-          </View>
-          <Text style={styles.label}>What are you selling?</Text>
-          <TextInput
-            value={title}
-            onChangeText={setTitle}
-            placeholder="e.g. Organic Chemistry textbook"
-            style={styles.field}
-          />
-          <Text style={styles.label}>Price</Text>
-          <TextInput
-            value={price}
-            onChangeText={setPrice}
-            keyboardType="numeric"
-            placeholder="$ 0"
-            style={styles.field}
-          />
-          <Pressable
-            disabled={!title || !price}
-            style={[styles.primary, (!title || !price) && styles.disabled]}
-            onPress={() => onSubmit(title, price, category)}
-          >
-            <Text style={styles.primaryText}>Publish listing</Text>
-          </Pressable>
-        </View>
-      </View>
-    </Modal>
-  );
-}
-
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F8F8F4" },
   nav: {
@@ -585,17 +537,6 @@ const styles = StyleSheet.create({
   },
   primaryText: { color: "#FFF", fontWeight: "800" },
   auth: { backgroundColor: "#FFF", borderRadius: 20, padding: 24, margin: 20 },
-  form: {
-    backgroundColor: "#FFF",
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 24,
-  },
-  formHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
   formTitle: { color: "#173C34", fontSize: 22, fontWeight: "800" },
   authMessage: { color: "#87918C", lineHeight: 20, marginTop: 10 },
   authError: {
@@ -628,20 +569,4 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   outlineText: { color: "#1F5D4C", fontWeight: "800" },
-  label: {
-    color: "#365B4C",
-    fontSize: 12,
-    fontWeight: "800",
-    marginTop: 18,
-    marginBottom: 7,
-  },
-  field: {
-    height: 50,
-    borderWidth: 1,
-    borderColor: "#DDE4DC",
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    color: "#173C34",
-  },
-  disabled: { opacity: 0.45 },
 });
