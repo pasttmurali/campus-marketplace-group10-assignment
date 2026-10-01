@@ -14,6 +14,9 @@ export type Listing = {
   status: "available" | "sold";
   soldAt?: Timestamp | null;
   updatedAt?: Timestamp;
+  createdAt?: Timestamp | Date | string | number | null;
 };
+
+export type ListingSortOrder = "newest" | "price-asc" | "price-desc";
 
 export type Tab = "Explore" | "Saved" | "Messages" | "Profile" | "MyListings";
