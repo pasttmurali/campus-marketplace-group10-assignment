@@ -11,4 +11,10 @@ export type Listing = {
   description?: string;
 };
 
-export type Tab = "Explore" | "Saved" | "Messages" | "Profile" | "MyListings";
+export type Tab =
+  | "Explore"
+  | "Saved"
+  | "Messages"
+  | "Profile"
+  | "MyListings"
+  | "SellerProfile";
