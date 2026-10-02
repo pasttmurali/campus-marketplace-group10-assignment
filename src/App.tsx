@@ -43,6 +43,7 @@ import { MessagesPage } from "./pages/MessagesPage";
 import { MyListingsPage } from "./pages/MyListingsPage";
 import { ProfilePage } from "./pages/ProfilePage";
 import { SavedPage } from "./pages/SavedPage";
+import { SellerProfilePage } from "./pages/SellerProfilePage";
 import { seedListings } from "./data";
 import { auth, db, firebaseConfigured } from "./firebase";
 import {
@@ -94,6 +95,7 @@ export default function App() {
   const [sortOrder, setSortOrder] = useState<ListingSortOrder>("newest");
   const [savedIds, setSavedIds] = useState<string[]>([]);
   const [selected, setSelected] = useState<Listing | null>(null);
+  const [selectedSeller, setSelectedSeller] = useState<Listing | null>(null);
   const [user, setUser] = useState<User | null>(auth?.currentUser || null);
   const [authOpen, setAuthOpen] = useState(false);
   const [sellOpen, setSellOpen] = useState(false);
@@ -175,6 +177,17 @@ export default function App() {
   const myListings = useMemo(
     () => (user ? items.filter((item) => item.sellerId === user.uid) : []),
     [items, user],
+  );
+  const sellerListings = useMemo(
+    () =>
+      selectedSeller
+        ? items.filter((item) =>
+            selectedSeller.sellerId
+              ? item.sellerId === selectedSeller.sellerId
+              : item.seller === selectedSeller.seller,
+          )
+        : [],
+    [items, selectedSeller],
   );
   const toggleSaved = (id: string) =>
     setSavedIds((current) =>
@@ -350,6 +363,20 @@ export default function App() {
           onSignOut={() => auth && signOut(auth)}
         />
       )}
+      {tab === "SellerProfile" && selectedSeller && (
+        <SellerProfilePage
+          seller={selectedSeller}
+          items={sellerListings}
+          savedIds={savedIds}
+          onBack={() => {
+            setSelected(selectedSeller);
+            setTab("Explore");
+          }}
+          onSave={toggleSaved}
+          onOpen={setSelected}
+          onMessage={contactSeller}
+        />
+      )}
       <BottomNav
         tab={tab}
         savedCount={savedIds.length}
@@ -363,6 +390,11 @@ export default function App() {
         onContact={contactSeller}
         onStatusChange={changeListingStatus}
         onEdit={() => setEditOpen(true)}
+        onViewSeller={(item) => {
+          setSelectedSeller(item);
+          setSelected(null);
+          setTab("SellerProfile");
+        }}
       />
       <ListingFormModal
         visible={editOpen}
@@ -464,6 +496,7 @@ function ListingModal({
   onContact,
   onStatusChange,
   onEdit,
+  onViewSeller,
 }: {
   item: Listing | null;
   user: User | null;
@@ -471,6 +504,7 @@ function ListingModal({
   onContact: () => void;
   onStatusChange: (id: string, status: Listing["status"]) => Promise<void>;
   onEdit: () => void;
+  onViewSeller: (item: Listing) => void;
 }) {
   const [savingStatus, setSavingStatus] = useState(false);
   const [statusError, setStatusError] = useState("");
@@ -527,8 +561,13 @@ function ListingModal({
               <Text style={styles.detailTitle}>{item.title}</Text>
               <Text style={styles.detailPrice}>${item.price}</Text>
               <Text style={styles.muted}>
-                {item.condition} · {item.campus} · {item.seller}
+                {item.condition} · {item.campus}
               </Text>
+              <Pressable onPress={() => onViewSeller(item)}>
+                <Text style={styles.sellerLink}>
+                  View seller profile · {item.seller}
+                </Text>
+              </Pressable>
               <Text style={styles.description}>{item.description}</Text>
               {isOwner ? (
                 <View>
@@ -702,6 +741,12 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   muted: { color: "#87918C", fontSize: 12 },
+  sellerLink: {
+    color: "#23775D",
+    fontSize: 13,
+    fontWeight: "800",
+    marginTop: 10,
+  },
   description: {
     color: "#66736D",
     fontSize: 14,

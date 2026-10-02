@@ -19,4 +19,10 @@ export type Listing = {
 
 export type ListingSortOrder = "newest" | "price-asc" | "price-desc";
 
-export type Tab = "Explore" | "Saved" | "Messages" | "Profile" | "MyListings";
+export type Tab =
+  | "Explore"
+  | "Saved"
+  | "Messages"
+  | "Profile"
+  | "MyListings"
+  | "SellerProfile";
