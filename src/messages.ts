@@ -1,6 +1,7 @@
 import {
   collection,
   doc,
+  getDoc,
   onSnapshot,
   orderBy,
   query,
@@ -57,8 +58,51 @@ export async function sendConversationMessage(
   });
   batch.update(conversationRef, {
     lastMessage: trimmedText,
+    lastMessageId: messageRef.id,
     lastSenderId: senderId,
     updatedAt: serverTimestamp(),
   });
+  await batch.commit();
+}
+
+export async function editConversationMessage(
+  conversationId: string,
+  messageId: string,
+  text: string,
+) {
+  const trimmedText = text.trim();
+  if (!db) throw new Error("Messaging is unavailable until Firebase is configured.");
+  if (!trimmedText) throw new Error("A message cannot be empty.");
+  if (trimmedText.length > 2000) throw new Error("Messages can contain up to 2,000 characters.");
+  const conversationRef = doc(db, "conversations", conversationId);
+  const messageRef = doc(conversationRef, "messages", messageId);
+  const conversation = await getDoc(conversationRef);
+  const batch = writeBatch(db);
+  batch.update(messageRef, {
+    text: trimmedText,
+    editedAt: serverTimestamp(),
+  });
+  if (conversation.data()?.lastMessageId === messageId) {
+    batch.update(conversationRef, { lastMessage: trimmedText, updatedAt: serverTimestamp() });
+  }
+  await batch.commit();
+}
+
+export async function deleteConversationMessage(
+  conversationId: string,
+  messageId: string,
+) {
+  if (!db) throw new Error("Messaging is unavailable until Firebase is configured.");
+  const conversationRef = doc(db, "conversations", conversationId);
+  const messageRef = doc(conversationRef, "messages", messageId);
+  const conversation = await getDoc(conversationRef);
+  const batch = writeBatch(db);
+  batch.update(messageRef, {
+    text: "",
+    deletedAt: serverTimestamp(),
+  });
+  if (conversation.data()?.lastMessageId === messageId) {
+    batch.update(conversationRef, { lastMessage: "This message was deleted", updatedAt: serverTimestamp() });
+  }
   await batch.commit();
 }

@@ -31,6 +31,7 @@ export type Conversation = {
   listingImage?: string;
   lastMessage?: string;
   lastSenderId?: string;
+  lastMessageId?: string;
   updatedAt?: Timestamp | null;
 };
 
@@ -39,6 +40,8 @@ export type Message = {
   senderId: string;
   text: string;
   createdAt?: Timestamp | null;
+  editedAt?: Timestamp | null;
+  deletedAt?: Timestamp | null;
 };
 
 export type Tab =
