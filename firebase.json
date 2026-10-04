@@ -5,5 +5,8 @@
     "edition": "enterprise",
     "database": "campus-marketplace-db",
     "location": "asia-south1"
+  },
+  "storage": {
+    "rules": "storage.rules"
   }
 }

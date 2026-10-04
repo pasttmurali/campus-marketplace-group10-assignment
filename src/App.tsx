@@ -8,6 +8,7 @@ import {
   signInWithPopup,
   signInWithRedirect,
   signOut,
+  updateProfile,
   User,
 } from "firebase/auth";
 import {
@@ -22,6 +23,7 @@ import {
   setDoc,
   where,
 } from "firebase/firestore";
+import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -47,7 +49,7 @@ import { ProfilePage } from "./pages/ProfilePage";
 import { SavedPage } from "./pages/SavedPage";
 import { SellerProfilePage } from "./pages/SellerProfilePage";
 import { seedListings } from "./data";
-import { auth, db, firebaseConfigured } from "./firebase";
+import { auth, db, firebaseConfigured, storage } from "./firebase";
 import {
   getDemoListings,
   normalizeListing,
@@ -105,12 +107,16 @@ export default function App() {
   const [editOpen, setEditOpen] = useState(false);
   const [authError, setAuthError] = useState("");
   const [profileReady, setProfileReady] = useState(false);
+  const [profilePhotoURL, setProfilePhotoURL] = useState<string | null>(
+    auth?.currentUser?.photoURL || null,
+  );
 
   useEffect(() => {
     const firebaseAuth = auth;
     if (!firebaseAuth) return;
     const handleUser = (nextUser: User | null) => {
       setUser(nextUser);
+      setProfilePhotoURL(nextUser?.photoURL || null);
       if (nextUser) {
         setAuthOpen(false);
         setAuthError("");
@@ -363,6 +369,30 @@ export default function App() {
     setAuthOpen(false);
   }, []);
 
+  const changeProfilePhoto = async (uri: string) => {
+    if (!user || !storage) {
+      throw new Error("Sign in before adding a profile photo.");
+    }
+
+    const response = await fetch(uri);
+    if (!response.ok) throw new Error("Could not read the selected photo.");
+    const photo = await response.blob();
+    if (photo.size > 5 * 1024 * 1024) {
+      throw new Error("Choose a profile photo smaller than 5 MB.");
+    }
+
+    setAuthError("");
+    const photoRef = ref(storage, `profile-photos/${user.uid}/avatar`);
+    await uploadBytes(photoRef, photo, {
+      contentType: photo.type || "image/jpeg",
+    });
+    const photoURL = await getDownloadURL(photoRef);
+    await updateProfile(user, { photoURL });
+    await registerUser(user);
+    setProfilePhotoURL(photoURL);
+    setProfileReady(true);
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar style="dark" />
@@ -377,7 +407,7 @@ export default function App() {
           filterError={filterResult.error}
           savedIds={savedIds}
           userEmail={user?.email || null}
-          userPhotoURL={user?.photoURL || null}
+          userPhotoURL={profilePhotoURL}
           onQueryChange={setQueryText}
           onCategoryChange={setCategory}
           onMinPriceChange={setMinPrice}
@@ -416,6 +446,7 @@ export default function App() {
       {tab === "Profile" && (
         <ProfilePage
           user={user}
+          photoURL={profilePhotoURL}
           savedCount={savedIds.length}
           listingCount={myListings.length}
           firebaseConfigured={firebaseConfigured}
@@ -425,6 +456,7 @@ export default function App() {
           onSaved={() => setTab("Saved")}
           onSignIn={() => setAuthOpen(true)}
           onSignOut={() => auth && signOut(auth)}
+          onChangePhoto={changeProfilePhoto}
         />
       )}
       {tab === "SellerProfile" && selectedSeller && (

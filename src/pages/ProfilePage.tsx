@@ -1,4 +1,5 @@
 import {
+  ActivityIndicator,
   Image,
   Pressable,
   ScrollView,
@@ -6,10 +7,13 @@ import {
   Text,
   View,
 } from "react-native";
+import * as ImagePicker from "expo-image-picker";
 import { User } from "firebase/auth";
+import { useState } from "react";
 import { PageTitle } from "../components/PageTitle";
 export function ProfilePage({
   user,
+  photoURL,
   savedCount,
   listingCount,
   firebaseConfigured,
@@ -19,8 +23,10 @@ export function ProfilePage({
   onSaved,
   onSignIn,
   onSignOut,
+  onChangePhoto,
 }: {
   user: User | null;
+  photoURL: string | null;
   savedCount: number;
   listingCount: number;
   firebaseConfigured: boolean;
@@ -30,7 +36,10 @@ export function ProfilePage({
   onSaved: () => void;
   onSignIn: () => void;
   onSignOut: () => void;
+  onChangePhoto: (uri: string) => Promise<void>;
 }) {
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const [photoError, setPhotoError] = useState("");
   const name =
     user?.displayName || user?.email?.split("@")[0] || "Campus guest";
   const initials = name
@@ -39,12 +48,44 @@ export function ProfilePage({
     .join("")
     .slice(0, 2)
     .toUpperCase();
+
+  const pickProfilePhoto = async () => {
+    setPhotoError("");
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      setPhotoError("Allow photo library access to choose a profile photo.");
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+      selectionLimit: 1,
+    });
+    if (result.canceled) return;
+
+    setPhotoBusy(true);
+    try {
+      await onChangePhoto(result.assets[0].uri);
+    } catch (uploadError) {
+      setPhotoError(
+        uploadError instanceof Error
+          ? uploadError.message
+          : "Could not update the profile photo.",
+      );
+    } finally {
+      setPhotoBusy(false);
+    }
+  };
+
   return (
     <ScrollView contentContainerStyle={styles.content}>
       <PageTitle title="Profile" subtitle="Your campus marketplace account" />
       <View style={styles.hero}>
-        {user?.photoURL ? (
-          <Image source={{ uri: user.photoURL }} style={styles.avatar} />
+        {photoURL ? (
+          <Image source={{ uri: photoURL }} style={styles.avatar} />
         ) : (
           <View style={styles.avatar}>
             <Text style={styles.initials}>{user ? initials : "?"}</Text>
@@ -54,6 +95,27 @@ export function ProfilePage({
         <Text style={styles.muted}>
           {user?.email || "Sign in to sell and message"}
         </Text>
+        {user ? (
+          <Pressable
+            style={({ pressed }) => [
+              styles.photoButton,
+              pressed && styles.photoButtonPressed,
+              photoBusy && styles.disabled,
+            ]}
+            onPress={pickProfilePhoto}
+            disabled={photoBusy}
+            accessibilityRole="button"
+          >
+            {photoBusy ? (
+              <ActivityIndicator color="#1F5D4C" size="small" />
+            ) : (
+              <Text style={styles.photoButtonText}>
+                {photoURL ? "Edit profile photo" : "Add profile photo"}
+              </Text>
+            )}
+          </Pressable>
+        ) : null}
+        {photoError ? <Text style={styles.photoError}>{photoError}</Text> : null}
       </View>
       <View style={styles.menu}>
         <Row
@@ -116,6 +178,19 @@ const styles = StyleSheet.create({
   initials: { fontSize: 22, color: "#225347", fontWeight: "800" },
   name: { color: "#173C34", fontSize: 24, fontWeight: "800", marginBottom: 6 },
   muted: { color: "#87918C", fontSize: 12 },
+  photoButton: {
+    minHeight: 38,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#BCD0C3",
+    justifyContent: "center",
+    marginTop: 14,
+    paddingHorizontal: 16,
+  },
+  photoButtonPressed: { backgroundColor: "#EDF5EF" },
+  photoButtonText: { color: "#1F5D4C", fontSize: 12, fontWeight: "800" },
+  photoError: { color: "#B64950", fontSize: 12, marginTop: 10 },
+  disabled: { opacity: 0.6 },
   menu: {
     backgroundColor: "#FFF",
     borderRadius: 16,

@@ -22,6 +22,14 @@
       },
       "predictiveBackGestureEnabled": false
     },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Campus Marketplace to choose a profile photo."
+        }
+      ]
+    ],
     "web": {
       "favicon": "./assets/favicon.png"
     }
