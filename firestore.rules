@@ -1,33 +1,112 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    function signedIn() { return request.auth != null; }
-    function owns(userId) { return signedIn() && request.auth.uid == userId; }
-
-    match /listings/{listingId} {
-      allow read: if true;
-      allow create: if signedIn() && request.resource.data.sellerId == request.auth.uid;
-      allow update: if signedIn()
-        && resource.data.sellerId == request.auth.uid
-        && request.resource.data.sellerId == resource.data.sellerId
-        && request.resource.data.createdAt == resource.data.createdAt
-        && request.resource.data.status in ['available', 'sold'];
-      allow delete: if signedIn() && resource.data.sellerId == request.auth.uid;
+    // Data model: private users/{uid}; authenticated listings/{id};
+    // private users/{uid}/saved/{listingId}; member-only conversations/{id}.
+    function isAuthenticated() { return request.auth != null; }
+    function isOwner(uid) { return isAuthenticated() && request.auth.uid == uid; }
+    function uidUnchanged(data) { return data.uid == request.auth.uid; }
+    function uidNotModified() { return request.resource.data.uid == resource.data.uid; }
+    function recent(value) {
+      return value is timestamp && value > request.time - duration.value(5, 'm')
+        && value <= request.time;
     }
-
-    match /users/{userId} {
-      allow read, write: if owns(userId);
+    function validUrl(value) {
+      return value is string && value.size() <= 2048
+        && (value.matches('^https://.*') || value.matches('^http://.*'));
     }
-
-    match /users/{userId}/saved/{listingId} {
-      allow read, write: if owns(userId);
+    function validUser(data) {
+      return data.keys().hasOnly(['uid','displayName','email','photoURL','campus','updatedAt'])
+        && data.keys().hasAll(['uid','displayName','email','photoURL','campus','updatedAt'])
+        && data.uid is string && data.uid.size() >= 20 && data.uid.size() <= 128
+        && data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 80
+        && data.email is string && data.email.size() <= 254
+        && data.email.matches('^[^@]+@[^@]+[.][^@]+$')
+        && (data.photoURL == null || validUrl(data.photoURL))
+        && data.campus is string && data.campus.size() >= 1 && data.campus.size() <= 100
+        && recent(data.updatedAt);
     }
-
-    match /conversations/{conversationId} {
-      allow read, write: if signedIn() && request.auth.uid in resource.data.memberIds;
-      match /messages/{messageId} {
-        allow read, create: if signedIn() && request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.memberIds;
+    function validListing(data) {
+      return data.keys().hasOnly(['title','price','category','seller','sellerId','campus','condition','image','description','status','createdAt','updatedAt','soldAt'])
+        && data.keys().hasAll(['title','price','category','seller','sellerId','campus','condition','image','description','status','createdAt'])
+        && data.title is string && data.title.size() >= 2 && data.title.size() <= 120
+        && data.price is number && data.price >= 0 && data.price <= 1000000
+        && data.category is string && data.category in ['Textbooks','Furniture','Tech','Fashion']
+        && data.seller is string && data.seller.size() >= 1 && data.seller.size() <= 80
+        && data.sellerId is string && data.sellerId.size() >= 20 && data.sellerId.size() <= 128
+        && data.campus is string && data.campus.size() >= 1 && data.campus.size() <= 100
+        && data.condition is string && data.condition.size() >= 1 && data.condition.size() <= 80
+        && validUrl(data.image)
+        && data.description is string && data.description.size() <= 2000
+        && data.status in ['available','sold'] && data.createdAt is timestamp
+        && (!('updatedAt' in data) || data.updatedAt is timestamp)
+        && (!('soldAt' in data) || data.soldAt == null || data.soldAt is timestamp);
+    }
+    function validSaved(data, uid, listingId) {
+      return data.keys().hasOnly(['listingId','userId','createdAt'])
+        && data.keys().hasAll(['listingId','userId','createdAt'])
+        && data.listingId == listingId && data.userId == uid && recent(data.createdAt);
+    }
+    function validConversation(data) {
+      return data.keys().hasOnly(['listingId','listingTitle','memberIds','buyerId','sellerId','sellerName','updatedAt'])
+        && data.keys().hasAll(['listingId','listingTitle','memberIds','buyerId','sellerId','sellerName','updatedAt'])
+        && data.listingId is string && data.listingId.size() >= 1 && data.listingId.size() <= 128
+        && data.listingTitle is string && data.listingTitle.size() >= 1 && data.listingTitle.size() <= 120
+        && data.memberIds is list && data.memberIds.size() == 2
+        && data.buyerId is string && data.buyerId.size() >= 20 && data.buyerId.size() <= 128
+        && data.sellerId is string && data.sellerId.size() >= 20 && data.sellerId.size() <= 128
+        && data.buyerId != data.sellerId && data.buyerId in data.memberIds && data.sellerId in data.memberIds
+        && data.sellerName is string && data.sellerName.size() >= 1 && data.sellerName.size() <= 80
+        && recent(data.updatedAt);
+    }
+    function isConversationMember(id) {
+      return isAuthenticated() && request.auth.uid in get(/databases/$(database)/documents/conversations/$(id)).data.memberIds;
+    }
+    function validMessage(data) {
+      return data.keys().hasOnly(['senderId','text','createdAt'])
+        && data.keys().hasAll(['senderId','text','createdAt'])
+        && data.senderId == request.auth.uid && data.text is string
+        && data.text.size() >= 1 && data.text.size() <= 2000 && recent(data.createdAt);
+    }
+    match /users/{uid} {
+      allow read: if isOwner(uid);
+      allow create: if isOwner(uid) && uidUnchanged(request.resource.data) && validUser(request.resource.data);
+      allow update: if isOwner(uid) && uidNotModified() && validUser(request.resource.data);
+      allow delete: if isOwner(uid);
+      match /saved/{listingId} {
+        allow read: if isOwner(uid);
+        allow create, update: if isOwner(uid)
+          && exists(/databases/$(database)/documents/users/$(uid))
+          && validSaved(request.resource.data, uid, listingId);
+        allow delete: if isOwner(uid);
       }
     }
+    match /listings/{listingId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.resource.data.sellerId == request.auth.uid
+        && recent(request.resource.data.createdAt) && validListing(request.resource.data);
+      allow update: if isAuthenticated() && resource.data.sellerId == request.auth.uid
+        && request.resource.data.sellerId == resource.data.sellerId
+        && request.resource.data.createdAt == resource.data.createdAt
+        && validListing(request.resource.data);
+      allow delete: if isAuthenticated() && resource.data.sellerId == request.auth.uid;
+    }
+    match /conversations/{conversationId} {
+      allow read: if isAuthenticated() && request.auth.uid in resource.data.memberIds;
+      allow create: if isAuthenticated() && request.auth.uid == request.resource.data.buyerId
+        && validConversation(request.resource.data);
+      allow update: if isAuthenticated() && request.auth.uid in resource.data.memberIds
+        && request.resource.data.memberIds == resource.data.memberIds
+        && request.resource.data.buyerId == resource.data.buyerId
+        && request.resource.data.sellerId == resource.data.sellerId
+        && validConversation(request.resource.data);
+      allow delete: if false;
+      match /messages/{messageId} {
+        allow read: if isConversationMember(conversationId);
+        allow create: if isConversationMember(conversationId) && validMessage(request.resource.data);
+        allow update, delete: if false;
+      }
+    }
+    match /{document=**} { allow read, write: if false; }
   }
 }

@@ -1,6 +1,9 @@
 {
   "firestore": {
     "rules": "firestore.rules",
-    "indexes": "firestore.indexes.json"
+    "indexes": "firestore.indexes.json",
+    "edition": "enterprise",
+    "database": "campus-marketplace-db",
+    "location": "asia-south1"
   }
 }

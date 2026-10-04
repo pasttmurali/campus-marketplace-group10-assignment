@@ -13,12 +13,14 @@ import {
 import {
   addDoc,
   collection,
+  deleteDoc,
   doc,
   onSnapshot,
   orderBy,
   query,
   serverTimestamp,
   setDoc,
+  where,
 } from "firebase/firestore";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -52,7 +54,7 @@ import {
   updateListing,
   setListingStatus,
 } from "./listings";
-import { Listing, ListingSortOrder, Tab } from "./types";
+import { Conversation, Listing, ListingSortOrder, Tab } from "./types";
 import { filterListings } from "./utils/filterListings";
 
 async function registerUser(user: User) {
@@ -94,6 +96,7 @@ export default function App() {
   const [maxPrice, setMaxPrice] = useState("");
   const [sortOrder, setSortOrder] = useState<ListingSortOrder>("newest");
   const [savedIds, setSavedIds] = useState<string[]>([]);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selected, setSelected] = useState<Listing | null>(null);
   const [selectedSeller, setSelectedSeller] = useState<Listing | null>(null);
   const [user, setUser] = useState<User | null>(auth?.currentUser || null);
@@ -144,7 +147,39 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!db) return;
+    if (!db || !user) {
+      setSavedIds([]);
+      return;
+    }
+    return onSnapshot(collection(db, "users", user.uid, "saved"), (snapshot) =>
+      setSavedIds(snapshot.docs.map((entry) => entry.id)),
+    );
+  }, [user]);
+
+  useEffect(() => {
+    if (!db || !user) {
+      setConversations([]);
+      return;
+    }
+    const inbox = query(
+      collection(db, "conversations"),
+      where("memberIds", "array-contains", user.uid),
+    );
+    return onSnapshot(inbox, (snapshot) =>
+      setConversations(
+        snapshot.docs.map((entry) => ({
+          id: entry.id,
+          ...entry.data(),
+        })) as Conversation[],
+      ),
+    );
+  }, [user]);
+
+  useEffect(() => {
+    if (!db || !user) {
+      setItems(getDemoListings());
+      return;
+    }
     const listingsQuery = query(
       collection(db, "listings"),
       orderBy("createdAt", "desc"),
@@ -161,7 +196,7 @@ export default function App() {
         ),
       () => setItems(getDemoListings()),
     );
-  }, []);
+  }, [user]);
 
   const filterResult = useMemo(
     () =>
@@ -189,12 +224,20 @@ export default function App() {
         : [],
     [items, selectedSeller],
   );
-  const toggleSaved = (id: string) =>
-    setSavedIds((current) =>
-      current.includes(id)
-        ? current.filter((value) => value !== id)
-        : [...current, id],
-    );
+  const toggleSaved = async (id: string) => {
+    if (!user || !db) {
+      setAuthOpen(true);
+      return;
+    }
+    const savedRef = doc(db, "users", user.uid, "saved", id);
+    if (savedIds.includes(id)) await deleteDoc(savedRef);
+    else
+      await setDoc(savedRef, {
+        listingId: id,
+        userId: user.uid,
+        createdAt: serverTimestamp(),
+      });
+  };
   const signInWithGoogle = async () => {
     if (!auth) return;
     setAuthError("");
@@ -249,11 +292,27 @@ export default function App() {
     });
     setSellOpen(false);
   };
-  const contactSeller = () => {
+  const contactSeller = async () => {
     if (!user) {
       setAuthOpen(true);
       return;
     }
+    if (!db || !selected?.sellerId || selected.sellerId === user.uid) return;
+    const memberIds = [user.uid, selected.sellerId].sort();
+    const conversationId = `${selected.id}_${memberIds.join("_")}`;
+    await setDoc(
+      doc(db, "conversations", conversationId),
+      {
+        listingId: selected.id,
+        listingTitle: selected.title,
+        memberIds,
+        buyerId: user.uid,
+        sellerId: selected.sellerId,
+        sellerName: selected.seller,
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    );
     setSelected(null);
     setTab("Messages");
   };
@@ -317,6 +376,8 @@ export default function App() {
           sortOrder={sortOrder}
           filterError={filterResult.error}
           savedIds={savedIds}
+          userEmail={user?.email || null}
+          userPhotoURL={user?.photoURL || null}
           onQueryChange={setQueryText}
           onCategoryChange={setCategory}
           onMinPriceChange={setMinPrice}
@@ -340,7 +401,10 @@ export default function App() {
         />
       )}
       {tab === "Messages" && (
-        <MessagesPage onBrowse={() => setTab("Explore")} />
+        <MessagesPage
+          conversations={conversations}
+          onBrowse={() => setTab("Explore")}
+        />
       )}
       {tab === "MyListings" && (
         <MyListingsPage

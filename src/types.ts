@@ -19,6 +19,17 @@ export type Listing = {
 
 export type ListingSortOrder = "newest" | "price-asc" | "price-desc";
 
+export type Conversation = {
+  id: string;
+  listingId: string;
+  listingTitle: string;
+  memberIds: string[];
+  buyerId: string;
+  sellerId: string;
+  sellerName: string;
+  updatedAt?: Timestamp | null;
+};
+
 export type Tab =
   | "Explore"
   | "Saved"

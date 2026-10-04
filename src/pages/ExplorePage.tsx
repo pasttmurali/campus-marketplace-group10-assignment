@@ -1,5 +1,6 @@
 import {
   FlatList,
+  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -20,6 +21,8 @@ export function ExplorePage({
   sortOrder,
   filterError,
   savedIds,
+  userEmail,
+  userPhotoURL,
   onQueryChange,
   onCategoryChange,
   onMinPriceChange,
@@ -38,6 +41,8 @@ export function ExplorePage({
   sortOrder: ListingSortOrder;
   filterError: string;
   savedIds: string[];
+  userEmail: string | null;
+  userPhotoURL: string | null;
   onQueryChange: (value: string) => void;
   onCategoryChange: (value: string) => void;
   onMinPriceChange: (value: string) => void;
@@ -48,17 +53,41 @@ export function ExplorePage({
   onOpen: (item: Listing) => void;
   onProfile: () => void;
 }) {
+  const userInitial = userEmail?.trim().charAt(0).toUpperCase() || "?";
+
   return (
     <ScrollView contentContainerStyle={styles.content}>
       <View style={styles.header}>
-        <View>
+        <View style={styles.heroCopy}>
           <Text style={styles.eyebrow}>CAMPUS MARKETPLACE</Text>
           <Text style={styles.heading}>
             Find your next{"\n"}favorite thing.
           </Text>
         </View>
-        <Pressable style={styles.avatar} onPress={onProfile}>
-          <Text style={styles.avatarText}>?</Text>
+        <Pressable
+          style={styles.account}
+          onPress={onProfile}
+          accessibilityRole="button"
+          accessibilityLabel={
+            userEmail ? `Open profile for ${userEmail}` : "Open profile"
+          }
+        >
+          {userEmail ? (
+            <Text style={styles.accountEmail} numberOfLines={1}>
+              {userEmail}
+            </Text>
+          ) : null}
+          <View style={styles.avatar}>
+            {userPhotoURL ? (
+              <Image
+                source={{ uri: userPhotoURL }}
+                style={styles.avatarImage}
+                accessibilityLabel={`${userEmail || "User"} profile photo`}
+              />
+            ) : (
+              <Text style={styles.avatarText}>{userInitial}</Text>
+            )}
+          </View>
         </Pressable>
       </View>
       <View style={styles.search}>
@@ -213,6 +242,19 @@ const styles = StyleSheet.create({
     lineHeight: 34,
     fontWeight: "800",
   },
+  heroCopy: { flex: 1 },
+  account: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 8,
+    marginLeft: 12,
+  },
+  accountEmail: {
+    color: "#49635A",
+    fontSize: 12,
+    fontWeight: "600",
+    maxWidth: 110,
+  },
   avatar: {
     width: 42,
     height: 42,
@@ -221,6 +263,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  avatarImage: { width: "100%", height: "100%", borderRadius: 21 },
   avatarText: { color: "#225347", fontWeight: "800" },
   search: {
     height: 52,
