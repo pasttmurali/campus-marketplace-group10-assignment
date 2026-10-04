@@ -91,6 +91,7 @@ async function confirmStatusChange(nextStatus: Listing["status"]): Promise<boole
 
 export default function App() {
   const [tab, setTab] = useState<Tab>("Explore");
+  const [tabHistory, setTabHistory] = useState<Tab[]>([]);
   const [items, setItems] = useState(getDemoListings);
   const [queryText, setQueryText] = useState("");
   const [category, setCategory] = useState("All items");
@@ -110,6 +111,22 @@ export default function App() {
   const [profilePhotoURL, setProfilePhotoURL] = useState<string | null>(
     auth?.currentUser?.photoURL || null,
   );
+
+  const navigateTo = useCallback((nextTab: Tab) => {
+    setTab((currentTab) => {
+      if (currentTab === nextTab) return currentTab;
+      setTabHistory((history) => [...history, currentTab]);
+      return nextTab;
+    });
+  }, []);
+
+  const goBack = useCallback(() => {
+    setTabHistory((history) => {
+      const previousTab = history[history.length - 1] || "Explore";
+      setTab(previousTab);
+      return history.slice(0, -1);
+    });
+  }, []);
 
   useEffect(() => {
     const firebaseAuth = auth;
@@ -337,7 +354,7 @@ export default function App() {
         { merge: true },
       );
       setSelected(null);
-      setTab("Messages");
+      navigateTo("Messages");
     } catch (error) {
       Alert.alert(
         "Could not start conversation",
@@ -447,7 +464,7 @@ export default function App() {
           }}
           onSave={toggleSaved}
           onOpen={setSelected}
-          onProfile={() => setTab("Profile")}
+          onProfile={() => navigateTo("Profile")}
         />
       )}
       {tab === "Saved" && (
@@ -455,13 +472,15 @@ export default function App() {
           items={items.filter((item) => savedIds.includes(item.id))}
           onSave={toggleSaved}
           onOpen={setSelected}
+          onBack={goBack}
         />
       )}
       {tab === "Messages" && (
         <MessagesPage
           conversations={conversations}
           userId={user?.uid || null}
-          onBrowse={() => setTab("Explore")}
+          onBrowse={() => navigateTo("Explore")}
+          onBack={goBack}
         />
       )}
       {tab === "MyListings" && (
@@ -469,6 +488,7 @@ export default function App() {
           items={myListings}
           onOpen={setSelected}
           onSell={() => setSellOpen(true)}
+          onBack={goBack}
         />
       )}
       {tab === "Profile" && (
@@ -480,11 +500,12 @@ export default function App() {
           firebaseConfigured={firebaseConfigured}
           profileReady={profileReady}
           error={authError}
-          onMyListings={() => (user ? setTab("MyListings") : setAuthOpen(true))}
-          onSaved={() => setTab("Saved")}
+          onMyListings={() => (user ? navigateTo("MyListings") : setAuthOpen(true))}
+          onSaved={() => navigateTo("Saved")}
           onSignIn={() => setAuthOpen(true)}
           onSignOut={() => auth && signOut(auth)}
           onChangePhoto={changeProfilePhoto}
+          onBack={goBack}
         />
       )}
       {tab === "SellerProfile" && selectedSeller && (
@@ -494,7 +515,7 @@ export default function App() {
           savedIds={savedIds}
           onBack={() => {
             setSelected(selectedSeller);
-            setTab("Explore");
+            goBack();
           }}
           onSave={toggleSaved}
           onOpen={setSelected}
@@ -504,7 +525,7 @@ export default function App() {
       <BottomNav
         tab={tab}
         savedCount={savedIds.length}
-        onChange={setTab}
+        onChange={navigateTo}
         onSell={() => setSellOpen(true)}
       />
       <ListingModal
@@ -517,7 +538,7 @@ export default function App() {
         onViewSeller={(item) => {
           setSelectedSeller(item);
           setSelected(null);
-          setTab("SellerProfile");
+          navigateTo("SellerProfile");
         }}
       />
       <ListingFormModal

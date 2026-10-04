@@ -21,10 +21,11 @@ function otherParticipant(conversation: Conversation, userId: string) {
   };
 }
 
-export function MessagesPage({ conversations, userId, onBrowse }: {
+export function MessagesPage({ conversations, userId, onBrowse, onBack }: {
   conversations: Conversation[];
   userId: string | null;
   onBrowse: () => void;
+  onBack: () => void;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -65,7 +66,7 @@ export function MessagesPage({ conversations, userId, onBrowse }: {
 
   if (!userId) {
     return <ScrollView contentContainerStyle={styles.content}>
-      <PageTitle title="Messages" subtitle="Plan safe, simple campus meetups" />
+      <PageTitle title="Messages" subtitle="Plan safe, simple campus meetups" onBack={onBack} />
       <EmptyState title="Sign in to start chatting" message="Your conversations stay private between you and the other student." action="Browse listings" onAction={onBrowse} />
     </ScrollView>;
   }
@@ -109,7 +110,7 @@ export function MessagesPage({ conversations, userId, onBrowse }: {
   }
 
   return <ScrollView contentContainerStyle={styles.content}>
-    <PageTitle title="Messages" subtitle="Plan safe, simple campus meetups" />
+    <PageTitle title="Messages" subtitle="Plan safe, simple campus meetups" onBack={onBack} />
     {sortedConversations.length ? <>
       <Text style={styles.sectionLabel}>RECENT CONVERSATIONS</Text>
       {sortedConversations.map((conversation) => {

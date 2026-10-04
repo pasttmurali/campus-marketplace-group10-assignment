@@ -24,6 +24,7 @@ export function ProfilePage({
   onSignIn,
   onSignOut,
   onChangePhoto,
+  onBack,
 }: {
   user: User | null;
   photoURL: string | null;
@@ -37,6 +38,7 @@ export function ProfilePage({
   onSignIn: () => void;
   onSignOut: () => void;
   onChangePhoto: (uri: string) => Promise<void>;
+  onBack: () => void;
 }) {
   const [photoBusy, setPhotoBusy] = useState(false);
   const [photoError, setPhotoError] = useState("");
@@ -82,7 +84,7 @@ export function ProfilePage({
 
   return (
     <ScrollView contentContainerStyle={styles.content}>
-      <PageTitle title="Profile" subtitle="Your campus marketplace account" />
+      <PageTitle title="Profile" subtitle="Your campus marketplace account" onBack={onBack} />
       <View style={styles.hero}>
         {photoURL ? (
           <Image source={{ uri: photoURL }} style={styles.avatar} />
