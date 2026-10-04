@@ -298,7 +298,7 @@ export default function App() {
     });
     setSellOpen(false);
   };
-  const contactSeller = async (listing: Listing | null = selected) => {
+  const contactSeller = async (listing: Listing | null) => {
     if (!user) {
       setAuthOpen(true);
       return;
@@ -507,7 +507,7 @@ export default function App() {
         item={selected}
         user={user}
         onClose={() => setSelected(null)}
-        onContact={contactSeller}
+        onContact={() => contactSeller(selected)}
         onStatusChange={changeListingStatus}
         onEdit={() => setEditOpen(true)}
         onViewSeller={(item) => {
