@@ -7,16 +7,19 @@ export function SavedPage({
   items,
   onSave,
   onOpen,
+  onBack,
 }: {
   items: Listing[];
   onSave: (id: string) => void;
   onOpen: (item: Listing) => void;
+  onBack: () => void;
 }) {
   return (
     <ScrollView contentContainerStyle={styles.content}>
       <PageTitle
         title="Saved items"
         subtitle="Your shortlist, all in one place"
+        onBack={onBack}
       />
       <FlatList
         data={items}

@@ -7,16 +7,19 @@ export function MyListingsPage({
   items,
   onOpen,
   onSell,
+  onBack,
 }: {
   items: Listing[];
   onOpen: (item: Listing) => void;
   onSell: () => void;
+  onBack: () => void;
 }) {
   return (
     <ScrollView contentContainerStyle={styles.content}>
       <PageTitle
         title="My listings"
         subtitle="Items you have posted to campus marketplace"
+        onBack={onBack}
       />
       <FlatList
         data={items}

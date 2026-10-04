@@ -91,6 +91,7 @@ async function confirmStatusChange(nextStatus: Listing["status"]): Promise<boole
 
 export default function App() {
   const [tab, setTab] = useState<Tab>("Explore");
+  const [tabHistory, setTabHistory] = useState<Tab[]>([]);
   const [items, setItems] = useState(getDemoListings);
   const [queryText, setQueryText] = useState("");
   const [category, setCategory] = useState("All items");
@@ -110,6 +111,22 @@ export default function App() {
   const [profilePhotoURL, setProfilePhotoURL] = useState<string | null>(
     auth?.currentUser?.photoURL || null,
   );
+
+  const navigateTo = useCallback((nextTab: Tab) => {
+    setTab((currentTab) => {
+      if (currentTab === nextTab) return currentTab;
+      setTabHistory((history) => [...history, currentTab]);
+      return nextTab;
+    });
+  }, []);
+
+  const goBack = useCallback(() => {
+    setTabHistory((history) => {
+      const previousTab = history[history.length - 1] || "Explore";
+      setTab(previousTab);
+      return history.slice(0, -1);
+    });
+  }, []);
 
   useEffect(() => {
     const firebaseAuth = auth;
@@ -298,29 +315,52 @@ export default function App() {
     });
     setSellOpen(false);
   };
-  const contactSeller = async () => {
+  const contactSeller = async (listing: Listing | null) => {
     if (!user) {
       setAuthOpen(true);
       return;
     }
-    if (!db || !selected?.sellerId || selected.sellerId === user.uid) return;
-    const memberIds = [user.uid, selected.sellerId].sort();
-    const conversationId = `${selected.id}_${memberIds.join("_")}`;
-    await setDoc(
-      doc(db, "conversations", conversationId),
-      {
-        listingId: selected.id,
-        listingTitle: selected.title,
-        memberIds,
-        buyerId: user.uid,
-        sellerId: selected.sellerId,
-        sellerName: selected.seller,
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true },
-    );
-    setSelected(null);
-    setTab("Messages");
+    if (!listing?.sellerId) {
+      Alert.alert(
+        "Demo listing",
+        "This sample seller is not connected to an account. Choose a listing published by a signed-in student to start a real conversation.",
+      );
+      return;
+    }
+    if (listing.sellerId === user.uid) {
+      Alert.alert("Your listing", "Buyers will be able to message you about this item.");
+      return;
+    }
+    if (!db) {
+      Alert.alert("Messaging unavailable", "Firebase is not configured for this app.");
+      return;
+    }
+    const memberIds = [user.uid, listing.sellerId].sort();
+    const conversationId = `${listing.id}_${memberIds.join("_")}`;
+    try {
+      await setDoc(
+        doc(db, "conversations", conversationId),
+        {
+          listingId: listing.id,
+          listingTitle: listing.title,
+          memberIds,
+          buyerId: user.uid,
+          sellerId: listing.sellerId,
+          sellerName: listing.seller,
+          buyerName: user.displayName || user.email?.split("@")[0] || "Campus buyer",
+          listingImage: listing.image,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      );
+      setSelected(null);
+      navigateTo("Messages");
+    } catch (error) {
+      Alert.alert(
+        "Could not start conversation",
+        error instanceof Error ? error.message : "Please try again.",
+      );
+    }
   };
   const changeListingStatus = async (
     id: string,
@@ -334,23 +374,27 @@ export default function App() {
       current?.id === id ? { ...current, status } : current,
     );
   };
-  const saveListingEdits = async (
-    title: string,
-    price: string,
-    listingCategory: string,
-  ) => {
+  const saveListingEdits = async (values: SellFormValues) => {
     if (!selected || !user || selected.sellerId !== user.uid) {
       throw new Error("You can't edit this listing.");
     }
     await updateListing(selected.id, {
-      title,
-      price: Number(price),
-      category: listingCategory,
+      title: values.title.trim(),
+      price: Number(values.price),
+      category: values.category,
+      condition: values.condition,
+      campus: values.campus,
+      description: values.description.trim(),
+      image: values.image.trim() || seedListings[0].image,
     });
     const updatedFields = {
-      title,
-      price: Number(price),
-      category: listingCategory,
+      title: values.title.trim(),
+      price: Number(values.price),
+      category: values.category,
+      condition: values.condition,
+      campus: values.campus,
+      description: values.description.trim(),
+      image: values.image.trim() || seedListings[0].image,
     };
     setItems((current) =>
       current.map((item) =>
@@ -420,7 +464,7 @@ export default function App() {
           }}
           onSave={toggleSaved}
           onOpen={setSelected}
-          onProfile={() => setTab("Profile")}
+          onProfile={() => navigateTo("Profile")}
         />
       )}
       {tab === "Saved" && (
@@ -428,12 +472,15 @@ export default function App() {
           items={items.filter((item) => savedIds.includes(item.id))}
           onSave={toggleSaved}
           onOpen={setSelected}
+          onBack={goBack}
         />
       )}
       {tab === "Messages" && (
         <MessagesPage
           conversations={conversations}
-          onBrowse={() => setTab("Explore")}
+          userId={user?.uid || null}
+          onBrowse={() => navigateTo("Explore")}
+          onBack={goBack}
         />
       )}
       {tab === "MyListings" && (
@@ -441,6 +488,7 @@ export default function App() {
           items={myListings}
           onOpen={setSelected}
           onSell={() => setSellOpen(true)}
+          onBack={goBack}
         />
       )}
       {tab === "Profile" && (
@@ -452,11 +500,12 @@ export default function App() {
           firebaseConfigured={firebaseConfigured}
           profileReady={profileReady}
           error={authError}
-          onMyListings={() => (user ? setTab("MyListings") : setAuthOpen(true))}
-          onSaved={() => setTab("Saved")}
+          onMyListings={() => (user ? navigateTo("MyListings") : setAuthOpen(true))}
+          onSaved={() => navigateTo("Saved")}
           onSignIn={() => setAuthOpen(true)}
           onSignOut={() => auth && signOut(auth)}
           onChangePhoto={changeProfilePhoto}
+          onBack={goBack}
         />
       )}
       {tab === "SellerProfile" && selectedSeller && (
@@ -466,30 +515,30 @@ export default function App() {
           savedIds={savedIds}
           onBack={() => {
             setSelected(selectedSeller);
-            setTab("Explore");
+            goBack();
           }}
           onSave={toggleSaved}
           onOpen={setSelected}
-          onMessage={contactSeller}
+          onMessage={() => contactSeller(selectedSeller)}
         />
       )}
       <BottomNav
         tab={tab}
         savedCount={savedIds.length}
-        onChange={setTab}
+        onChange={navigateTo}
         onSell={() => setSellOpen(true)}
       />
       <ListingModal
         item={selected}
         user={user}
         onClose={() => setSelected(null)}
-        onContact={contactSeller}
+        onContact={() => contactSeller(selected)}
         onStatusChange={changeListingStatus}
         onEdit={() => setEditOpen(true)}
         onViewSeller={(item) => {
           setSelectedSeller(item);
           setSelected(null);
-          setTab("SellerProfile");
+          navigateTo("SellerProfile");
         }}
       />
       <ListingFormModal
