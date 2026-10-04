@@ -48,7 +48,7 @@ service cloud.firestore {
         && data.listingId == listingId && data.userId == uid && recent(data.createdAt);
     }
     function validConversation(data) {
-      return data.keys().hasOnly(['listingId','listingTitle','memberIds','buyerId','sellerId','sellerName','buyerName','listingImage','lastMessage','lastSenderId','updatedAt'])
+      return data.keys().hasOnly(['listingId','listingTitle','memberIds','buyerId','sellerId','sellerName','buyerName','listingImage','lastMessage','lastSenderId','lastMessageId','updatedAt'])
         && data.keys().hasAll(['listingId','listingTitle','memberIds','buyerId','sellerId','sellerName','updatedAt'])
         && data.listingId is string && data.listingId.size() >= 1 && data.listingId.size() <= 128
         && data.listingTitle is string && data.listingTitle.size() >= 1 && data.listingTitle.size() <= 120
@@ -61,16 +61,35 @@ service cloud.firestore {
         && (!('listingImage' in data) || validUrl(data.listingImage))
         && (!('lastMessage' in data) || (data.lastMessage is string && data.lastMessage.size() >= 1 && data.lastMessage.size() <= 2000))
         && (!('lastSenderId' in data) || (data.lastSenderId is string && data.lastSenderId in data.memberIds))
+        && (!('lastMessageId' in data) || (data.lastMessageId is string && data.lastMessageId.size() >= 1 && data.lastMessageId.size() <= 128))
         && recent(data.updatedAt);
     }
     function isConversationMember(id) {
       return isAuthenticated() && request.auth.uid in get(/databases/$(database)/documents/conversations/$(id)).data.memberIds;
     }
-    function validMessage(data) {
+    function validNewMessage(data) {
       return data.keys().hasOnly(['senderId','text','createdAt'])
         && data.keys().hasAll(['senderId','text','createdAt'])
         && data.senderId == request.auth.uid && data.text is string
         && data.text.size() >= 1 && data.text.size() <= 2000 && recent(data.createdAt);
+    }
+    function validMessageEdit() {
+      return request.resource.data.keys().hasOnly(['senderId','text','createdAt','editedAt','deletedAt'])
+        && request.auth.uid == resource.data.senderId
+        && request.resource.data.senderId == resource.data.senderId
+        && request.resource.data.createdAt == resource.data.createdAt
+        && (
+          (!('deletedAt' in request.resource.data)
+            && request.resource.data.text is string
+            && request.resource.data.text.size() >= 1
+            && request.resource.data.text.size() <= 2000
+            && request.resource.data.editedAt is timestamp
+            && recent(request.resource.data.editedAt))
+          ||
+          (request.resource.data.deletedAt is timestamp
+            && recent(request.resource.data.deletedAt)
+            && request.resource.data.text == '')
+        );
     }
     match /users/{uid} {
       allow read: if isOwner(uid);
@@ -107,8 +126,9 @@ service cloud.firestore {
       allow delete: if false;
       match /messages/{messageId} {
         allow read: if isConversationMember(conversationId);
-        allow create: if isConversationMember(conversationId) && validMessage(request.resource.data);
-        allow update, delete: if false;
+        allow create: if isConversationMember(conversationId) && validNewMessage(request.resource.data);
+        allow update: if isConversationMember(conversationId) && validMessageEdit();
+        allow delete: if false;
       }
     }
     match /{document=**} { allow read, write: if false; }
