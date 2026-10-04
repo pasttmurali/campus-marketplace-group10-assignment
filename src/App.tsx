@@ -209,14 +209,16 @@ export default function App() {
     );
     return onSnapshot(
       listingsQuery,
-      (snapshot) =>
-        setItems(
-          snapshot.empty
-            ? getDemoListings()
-            : snapshot.docs.map(
-                (entry) => normalizeListing({ id: entry.id, ...entry.data() }),
-              ),
-        ),
+      (snapshot) => {
+        const liveListings = snapshot.docs.map((entry) =>
+          normalizeListing({ id: entry.id, ...entry.data() }),
+        );
+        const liveIds = new Set(liveListings.map((listing) => listing.id));
+        const demoListings = getDemoListings().filter(
+          (listing) => !liveIds.has(listing.id),
+        );
+        setItems([...liveListings, ...demoListings]);
+      },
       () => setItems(getDemoListings()),
     );
   }, [user]);
