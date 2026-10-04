@@ -18,7 +18,10 @@ export const firebaseApp = firebaseConfigured
     : initializeApp(firebaseConfig)
   : null;
 export const auth = firebaseApp ? getAuth(firebaseApp) : null;
-export const db = firebaseApp ? getFirestore(firebaseApp) : null;
+export const FIRESTORE_DATABASE_ID = "campus-marketplace-db";
+export const db = firebaseApp
+  ? getFirestore(firebaseApp, FIRESTORE_DATABASE_ID)
+  : null;
 export const listingsCollection = db ? collection(db, "listings") : null;
 export const usersCollection = db ? collection(db, "users") : null;
 export const listingDocument = (id: string) =>
