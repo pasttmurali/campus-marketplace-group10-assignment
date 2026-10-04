@@ -55,6 +55,8 @@ The checked-out development workspace already contains a configured local `.env`
 - Explore built-in demo listings without signing in.
 - View saved listings.
 - Open messages and contact a seller.
+- Exchange real-time private messages with buyers and sellers.
+- Preview the latest message and return to listing-based conversations.
 - View the current user's profile and listings.
 - Navigate back from a seller profile to the selected listing.
 

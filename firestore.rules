@@ -48,7 +48,7 @@ service cloud.firestore {
         && data.listingId == listingId && data.userId == uid && recent(data.createdAt);
     }
     function validConversation(data) {
-      return data.keys().hasOnly(['listingId','listingTitle','memberIds','buyerId','sellerId','sellerName','updatedAt'])
+      return data.keys().hasOnly(['listingId','listingTitle','memberIds','buyerId','sellerId','sellerName','buyerName','listingImage','lastMessage','lastSenderId','updatedAt'])
         && data.keys().hasAll(['listingId','listingTitle','memberIds','buyerId','sellerId','sellerName','updatedAt'])
         && data.listingId is string && data.listingId.size() >= 1 && data.listingId.size() <= 128
         && data.listingTitle is string && data.listingTitle.size() >= 1 && data.listingTitle.size() <= 120
@@ -57,6 +57,10 @@ service cloud.firestore {
         && data.sellerId is string && data.sellerId.size() >= 20 && data.sellerId.size() <= 128
         && data.buyerId != data.sellerId && data.buyerId in data.memberIds && data.sellerId in data.memberIds
         && data.sellerName is string && data.sellerName.size() >= 1 && data.sellerName.size() <= 80
+        && (!('buyerName' in data) || (data.buyerName is string && data.buyerName.size() >= 1 && data.buyerName.size() <= 80))
+        && (!('listingImage' in data) || validUrl(data.listingImage))
+        && (!('lastMessage' in data) || (data.lastMessage is string && data.lastMessage.size() >= 1 && data.lastMessage.size() <= 2000))
+        && (!('lastSenderId' in data) || (data.lastSenderId is string && data.lastSenderId in data.memberIds))
         && recent(data.updatedAt);
     }
     function isConversationMember(id) {

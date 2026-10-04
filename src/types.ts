@@ -27,7 +27,18 @@ export type Conversation = {
   buyerId: string;
   sellerId: string;
   sellerName: string;
+  buyerName?: string;
+  listingImage?: string;
+  lastMessage?: string;
+  lastSenderId?: string;
   updatedAt?: Timestamp | null;
+};
+
+export type Message = {
+  id: string;
+  senderId: string;
+  text: string;
+  createdAt?: Timestamp | null;
 };
 
 export type Tab =

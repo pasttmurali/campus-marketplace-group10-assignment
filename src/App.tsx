@@ -315,6 +315,8 @@ export default function App() {
         buyerId: user.uid,
         sellerId: selected.sellerId,
         sellerName: selected.seller,
+        buyerName: user.displayName || user.email?.split("@")[0] || "Campus buyer",
+        listingImage: selected.image,
         updatedAt: serverTimestamp(),
       },
       { merge: true },
@@ -433,6 +435,7 @@ export default function App() {
       {tab === "Messages" && (
         <MessagesPage
           conversations={conversations}
+          userId={user?.uid || null}
           onBrowse={() => setTab("Explore")}
         />
       )}
