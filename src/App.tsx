@@ -357,23 +357,27 @@ export default function App() {
       current?.id === id ? { ...current, status } : current,
     );
   };
-  const saveListingEdits = async (
-    title: string,
-    price: string,
-    listingCategory: string,
-  ) => {
+  const saveListingEdits = async (values: SellFormValues) => {
     if (!selected || !user || selected.sellerId !== user.uid) {
       throw new Error("You can't edit this listing.");
     }
     await updateListing(selected.id, {
-      title,
-      price: Number(price),
-      category: listingCategory,
+      title: values.title.trim(),
+      price: Number(values.price),
+      category: values.category,
+      condition: values.condition,
+      campus: values.campus,
+      description: values.description.trim(),
+      image: values.image.trim() || seedListings[0].image,
     });
     const updatedFields = {
-      title,
-      price: Number(price),
-      category: listingCategory,
+      title: values.title.trim(),
+      price: Number(values.price),
+      category: values.category,
+      condition: values.condition,
+      campus: values.campus,
+      description: values.description.trim(),
+      image: values.image.trim() || seedListings[0].image,
     };
     setItems((current) =>
       current.map((item) =>

@@ -12,7 +12,13 @@ import { categories } from "../data";
 
 export const sellCategories = categories.filter((value) => value !== "All items");
 export const sellConditions = ["Like new", "Good condition", "Fair"];
-export const sellCampuses = ["North Campus", "West Village", "East Quad"];
+export const sellCampuses = [
+  "North Campus",
+  "South Campus",
+  "Central Campus",
+  "West Village",
+  "East Quad",
+];
 
 export type SellFormValues = {
   title: string;
