@@ -5,6 +5,7 @@
   "dependencies": {
     "expo": "~57.0.15",
     "expo-auth-session": "~57.0.13",
+    "expo-image-picker": "~57.0.20",
     "expo-status-bar": "~57.0.1",
     "expo-web-browser": "~57.0.3",
     "firebase": "^12.18.0",
