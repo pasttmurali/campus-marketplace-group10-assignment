@@ -298,31 +298,52 @@ export default function App() {
     });
     setSellOpen(false);
   };
-  const contactSeller = async () => {
+  const contactSeller = async (listing: Listing | null = selected) => {
     if (!user) {
       setAuthOpen(true);
       return;
     }
-    if (!db || !selected?.sellerId || selected.sellerId === user.uid) return;
-    const memberIds = [user.uid, selected.sellerId].sort();
-    const conversationId = `${selected.id}_${memberIds.join("_")}`;
-    await setDoc(
-      doc(db, "conversations", conversationId),
-      {
-        listingId: selected.id,
-        listingTitle: selected.title,
-        memberIds,
-        buyerId: user.uid,
-        sellerId: selected.sellerId,
-        sellerName: selected.seller,
-        buyerName: user.displayName || user.email?.split("@")[0] || "Campus buyer",
-        listingImage: selected.image,
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true },
-    );
-    setSelected(null);
-    setTab("Messages");
+    if (!listing?.sellerId) {
+      Alert.alert(
+        "Demo listing",
+        "This sample seller is not connected to an account. Choose a listing published by a signed-in student to start a real conversation.",
+      );
+      return;
+    }
+    if (listing.sellerId === user.uid) {
+      Alert.alert("Your listing", "Buyers will be able to message you about this item.");
+      return;
+    }
+    if (!db) {
+      Alert.alert("Messaging unavailable", "Firebase is not configured for this app.");
+      return;
+    }
+    const memberIds = [user.uid, listing.sellerId].sort();
+    const conversationId = `${listing.id}_${memberIds.join("_")}`;
+    try {
+      await setDoc(
+        doc(db, "conversations", conversationId),
+        {
+          listingId: listing.id,
+          listingTitle: listing.title,
+          memberIds,
+          buyerId: user.uid,
+          sellerId: listing.sellerId,
+          sellerName: listing.seller,
+          buyerName: user.displayName || user.email?.split("@")[0] || "Campus buyer",
+          listingImage: listing.image,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      );
+      setSelected(null);
+      setTab("Messages");
+    } catch (error) {
+      Alert.alert(
+        "Could not start conversation",
+        error instanceof Error ? error.message : "Please try again.",
+      );
+    }
   };
   const changeListingStatus = async (
     id: string,
@@ -473,7 +494,7 @@ export default function App() {
           }}
           onSave={toggleSaved}
           onOpen={setSelected}
-          onMessage={contactSeller}
+          onMessage={() => contactSeller(selectedSeller)}
         />
       )}
       <BottomNav
