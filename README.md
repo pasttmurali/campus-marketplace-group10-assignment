@@ -56,6 +56,7 @@ Campus Marketplace is a cross-platform marketplace application for students to d
   - campus;
   - description;
   - optional image URL.
+- Paste a publicly accessible HTTP(S) image URL to preview a listing photo; the URL is stored directly with the listing, without uploading the image to Firebase Storage.
 - Field-level validation before publishing.
 - View all listings owned by the signed-in seller.
 - Edit every listing field through a pre-filled form.

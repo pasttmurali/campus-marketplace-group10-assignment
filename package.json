@@ -29,7 +29,7 @@
     "android:windows": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/run-android.ps1",
     "ios": "expo run:ios",
     "web": "expo start --web",
-    "test": "tsx --test tests/filterListings.test.mjs"
+    "test": "tsx --test tests/filterListings.test.mjs tests/validateImageUrl.test.mjs"
   },
   "private": true
 }

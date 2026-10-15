@@ -11,6 +11,7 @@ import {
 import { categories } from "../data";
 import { ListingImagePicker } from "./ListingImagePicker";
 import { CampusField, sriLankanCampuses } from "./CampusField";
+import { isValidImageUrl } from "../utils/validateImageUrl";
 
 export const sellCategories = categories.filter((value) => value !== "All items");
 export const sellConditions = ["Like new", "Good condition", "Fair"];
@@ -58,6 +59,9 @@ export function validateSellForm(values: SellFormValues): SellFormErrors {
   if (!values.campus) errors.campus = "Choose a campus.";
   if (values.description.trim().length < 10) {
     errors.description = "Description must be at least 10 characters.";
+  }
+  if (values.image.trim() && !isValidImageUrl(values.image)) {
+    errors.image = "Enter a valid image URL starting with http:// or https://.";
   }
   return errors;
 }

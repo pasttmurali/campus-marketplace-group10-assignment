@@ -113,10 +113,6 @@ async function uploadFirebaseImage(
   return getDownloadURL(imageRef);
 }
 
-async function uploadListingImage(uri: string, userId: string): Promise<string> {
-  return uploadFirebaseImage(uri, `listing-images/${userId}`, 8);
-}
-
 async function confirmStatusChange(nextStatus: Listing["status"], listingType: Listing["listingType"]): Promise<boolean> {
   const wanted = listingType === "wanted";
   const action = nextStatus === "sold"
@@ -357,15 +353,6 @@ export default function App() {
       );
       return;
     }
-    let image = "";
-    let imageUploadFailed = false;
-    if (draft.image.trim()) {
-      try {
-        image = await uploadListingImage(draft.image.trim(), user.uid);
-      } catch {
-        imageUploadFailed = true;
-      }
-    }
     await addDoc(collection(db, "listings"), {
       title: draft.title.trim(),
       price: Number(draft.price),
@@ -376,7 +363,7 @@ export default function App() {
       sellerPhotoURL: profilePhotoURL || "",
       campus: draft.campus,
       condition: draft.condition,
-      image,
+      image: draft.image.trim(),
       description: draft.description.trim(),
       negotiable: draft.negotiable,
       urgent: draft.urgent,
@@ -385,9 +372,6 @@ export default function App() {
       createdAt: serverTimestamp(),
     });
     setSellOpen(false);
-    if (imageUploadFailed) {
-      Alert.alert("Published without photo", "The listing was saved, but the photo could not be uploaded. You can add it later by editing the listing.");
-    }
   };
   const contactSeller = async (listing: Listing | null) => {
     if (!user) {
@@ -454,15 +438,7 @@ export default function App() {
     if (!selected || !user || selected.sellerId !== user.uid) {
       throw new Error("You can't edit this listing.");
     }
-    let image = values.image.trim();
-    if (image && isLocalImage(image)) {
-      try {
-        image = await uploadListingImage(image, user.uid);
-      } catch {
-        image = selected.image || "";
-        Alert.alert("Saved without new photo", "Your changes were saved, but the new photo could not be uploaded.");
-      }
-    }
+    const image = values.image.trim();
     await updateListing(selected.id, {
       title: values.title.trim(),
       price: Number(values.price),
