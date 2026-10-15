@@ -9,16 +9,12 @@ import {
   View,
 } from "react-native";
 import { categories } from "../data";
+import { ListingImagePicker } from "./ListingImagePicker";
+import { CampusField, sriLankanCampuses } from "./CampusField";
 
 export const sellCategories = categories.filter((value) => value !== "All items");
 export const sellConditions = ["Like new", "Good condition", "Fair"];
-export const sellCampuses = [
-  "North Campus",
-  "South Campus",
-  "Central Campus",
-  "West Village",
-  "East Quad",
-];
+export const sellCampuses = sriLankanCampuses;
 
 export type SellFormValues = {
   title: string;
@@ -28,6 +24,9 @@ export type SellFormValues = {
   campus: string;
   description: string;
   image: string;
+  negotiable: boolean;
+  urgent: boolean;
+  listingType: "selling" | "wanted";
 };
 
 export type SellFormErrors = Partial<Record<keyof SellFormValues, string>>;
@@ -40,6 +39,9 @@ const emptyValues: SellFormValues = {
   campus: "",
   description: "",
   image: "",
+  negotiable: false,
+  urgent: false,
+  listingType: "selling",
 };
 
 export function validateSellForm(values: SellFormValues): SellFormErrors {
@@ -57,26 +59,17 @@ export function validateSellForm(values: SellFormValues): SellFormErrors {
   if (values.description.trim().length < 10) {
     errors.description = "Description must be at least 10 characters.";
   }
-  const image = values.image.trim();
-  if (image) {
-    try {
-      const url = new URL(image);
-      if (url.protocol !== "https:") {
-        errors.image = "Image URL must start with https://.";
-      }
-    } catch {
-      errors.image = "Image URL must be a valid https link.";
-    }
-  }
   return errors;
 }
 
 export function SellForm({
   visible,
+  listingType,
   onClose,
   onSubmit,
 }: {
   visible: boolean;
+  listingType: "selling" | "wanted";
   onClose: () => void;
   onSubmit: (values: SellFormValues) => Promise<void>;
 }) {
@@ -84,16 +77,18 @@ export function SellForm({
   const [errors, setErrors] = useState<SellFormErrors>({});
   const [submitted, setSubmitted] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [submitError, setSubmitError] = useState("");
 
   useEffect(() => {
     if (!visible) return;
-    setValues(emptyValues);
+    setValues({ ...emptyValues, listingType });
     setErrors({});
     setSubmitted(false);
     setBusy(false);
-  }, [visible]);
+    setSubmitError("");
+  }, [listingType, visible]);
 
-  const update = (key: keyof SellFormValues, value: string) => {
+  const update = <K extends keyof SellFormValues>(key: K, value: SellFormValues[K]) => {
     const next = { ...values, [key]: value };
     setValues(next);
     if (submitted) setErrors(validateSellForm(next));
@@ -105,8 +100,11 @@ export function SellForm({
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0 || busy) return;
     setBusy(true);
+    setSubmitError("");
     try {
       await onSubmit(values);
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : "Could not publish listing.");
     } finally {
       setBusy(false);
     }
@@ -117,23 +115,23 @@ export function SellForm({
       <View style={styles.backdrop}>
         <View style={styles.form}>
           <View style={styles.formHeader}>
-            <Text style={styles.formTitle}>Sell an item</Text>
+            <Text style={styles.formTitle}>{listingType === "wanted" ? "Post an item you need" : "Sell an item"}</Text>
             <Pressable onPress={onClose} accessibilityLabel="Close sell form">
               <Text style={styles.closeText}>×</Text>
             </Pressable>
           </View>
           <ScrollView keyboardShouldPersistTaps="handled" style={styles.scroll}>
-            <Text style={styles.label}>What are you selling?</Text>
+            <Text style={styles.label}>{listingType === "wanted" ? "What item do you need?" : "What are you selling?"}</Text>
             <TextInput
               value={values.title}
               onChangeText={(value) => update("title", value)}
-              placeholder="e.g. Organic Chemistry textbook"
+              placeholder={listingType === "wanted" ? "e.g. Need a used bicycle" : "e.g. Organic Chemistry textbook"}
               placeholderTextColor="#87918C"
               style={[styles.field, errors.title && styles.fieldError]}
             />
             {errors.title ? <Text style={styles.error}>{errors.title}</Text> : null}
 
-            <Text style={styles.label}>Price</Text>
+            <Text style={styles.label}>{listingType === "wanted" ? "Your budget" : "Price"}</Text>
             <TextInput
               value={values.price}
               onChangeText={(value) => update("price", value.replace(/[^0-9.]/g, ""))}
@@ -143,6 +141,8 @@ export function SellForm({
               style={[styles.field, errors.price && styles.fieldError]}
             />
             {errors.price ? <Text style={styles.error}>{errors.price}</Text> : null}
+
+            <ToggleRow label={listingType === "wanted" ? "Budget is negotiable" : "Price is negotiable"} value={values.negotiable} onChange={(value) => update("negotiable", value)} />
 
             <ChipGroup
               label="Category"
@@ -158,13 +158,9 @@ export function SellForm({
               error={errors.condition}
               onChange={(value) => update("condition", value)}
             />
-            <ChipGroup
-              label="Campus"
-              options={sellCampuses}
-              value={values.campus}
-              error={errors.campus}
-              onChange={(value) => update("campus", value)}
-            />
+            <CampusField value={values.campus} error={errors.campus} disabled={busy} onChange={(value) => update("campus", value)} />
+
+            <ToggleRow label={listingType === "wanted" ? "Urgently needed" : "Urgent sale"} value={values.urgent} onChange={(value) => update("urgent", value)} />
 
             <Text style={styles.label}>Description</Text>
             <TextInput
@@ -179,17 +175,14 @@ export function SellForm({
               <Text style={styles.error}>{errors.description}</Text>
             ) : null}
 
-            <Text style={styles.label}>Image URL (optional)</Text>
-            <TextInput
+            <ListingImagePicker
               value={values.image}
-              onChangeText={(value) => update("image", value)}
-              autoCapitalize="none"
-              autoCorrect={false}
-              placeholder="https://..."
-              placeholderTextColor="#87918C"
-              style={[styles.field, errors.image && styles.fieldError]}
+              error={errors.image}
+              disabled={busy}
+              onChange={(value) => update("image", value)}
             />
-            {errors.image ? <Text style={styles.error}>{errors.image}</Text> : null}
+
+            {submitError ? <Text style={styles.submitError}>{submitError}</Text> : null}
 
             <Pressable
               disabled={busy}
@@ -205,6 +198,10 @@ export function SellForm({
       </View>
     </Modal>
   );
+}
+
+function ToggleRow({ label, value, onChange }: { label: string; value: boolean; onChange: (value: boolean) => void }) {
+  return <Pressable accessibilityRole="switch" accessibilityState={{ checked: value }} onPress={() => onChange(!value)} style={styles.toggleRow}><Text style={styles.toggleLabel}>{label}</Text><View style={[styles.toggle, value && styles.toggleActive]}><View style={[styles.toggleKnob, value && styles.toggleKnobActive]} /></View></Pressable>;
 }
 
 function ChipGroup({
@@ -308,4 +305,11 @@ const styles = StyleSheet.create({
   },
   primaryText: { color: "#FFF", fontWeight: "800" },
   disabled: { opacity: 0.45 },
+  submitError: { backgroundColor: "#FBECEE", borderRadius: 10, color: "#B64950", fontSize: 12, marginTop: 16, padding: 10 },
+  toggleRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginTop: 16, minHeight: 42 },
+  toggleLabel: { color: "#365B4C", fontSize: 13, fontWeight: "800" },
+  toggle: { backgroundColor: "#CCD4CF", borderRadius: 13, height: 26, padding: 3, width: 46 },
+  toggleActive: { backgroundColor: "#1F5D4C" },
+  toggleKnob: { backgroundColor: "#FFF", borderRadius: 10, height: 20, width: 20 },
+  toggleKnobActive: { alignSelf: "flex-end" },
 });

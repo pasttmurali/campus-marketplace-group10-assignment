@@ -12,7 +12,8 @@ const androidClientId = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID;
 const iosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
 
 const nativeClientConfigured =
-  Platform.OS === "android" ? Boolean(androidClientId) : Boolean(iosClientId);
+  Boolean(webClientId) &&
+  (Platform.OS === "android" ? Boolean(androidClientId) : Boolean(iosClientId));
 
 export function GoogleSignInButton({
   onSuccess,
@@ -64,13 +65,18 @@ export function GoogleSignInButton({
   const signIn = async () => {
     if (!nativeClientConfigured) {
       onError(
-        `Add EXPO_PUBLIC_GOOGLE_${Platform.OS.toUpperCase()}_CLIENT_ID to .env first.`,
+        `Add both EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID and EXPO_PUBLIC_GOOGLE_${Platform.OS.toUpperCase()}_CLIENT_ID to .env first.`,
       );
       return;
     }
     setBusy(true);
     onError("");
-    await promptAsync();
+    try {
+      await promptAsync();
+    } catch (error) {
+      setBusy(false);
+      onError(error instanceof Error ? error.message : "Could not open Google sign-in.");
+    }
   };
 
   return (

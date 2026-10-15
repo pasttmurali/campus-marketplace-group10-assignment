@@ -7,10 +7,15 @@ export type Listing = {
   category: string;
   seller: string;
   sellerId?: string;
+  sellerPhone?: string;
+  sellerPhotoURL?: string;
   campus: string;
   condition: string;
   image: string;
   description?: string;
+  negotiable?: boolean;
+  urgent?: boolean;
+  listingType?: "selling" | "wanted";
   status: "available" | "sold";
   soldAt?: Timestamp | null;
   updatedAt?: Timestamp;
@@ -28,6 +33,8 @@ export type Conversation = {
   sellerId: string;
   sellerName: string;
   buyerName?: string;
+  sellerPhotoURL?: string;
+  buyerPhotoURL?: string;
   listingImage?: string;
   lastMessage?: string;
   lastSenderId?: string;

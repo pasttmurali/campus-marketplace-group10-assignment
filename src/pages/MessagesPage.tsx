@@ -18,6 +18,7 @@ function otherParticipant(conversation: Conversation, userId: string) {
   return {
     name: isSeller ? conversation.buyerName || "Interested buyer" : conversation.sellerName,
     role: isSeller ? "Buyer" : "Seller",
+    photoURL: isSeller ? conversation.buyerPhotoURL : conversation.sellerPhotoURL,
   };
 }
 
@@ -106,7 +107,7 @@ export function MessagesPage({ conversations, userId, onBrowse, onBack }: {
     return <View style={styles.threadPage}>
       <View style={styles.threadHeader}>
         <Pressable accessibilityRole="button" onPress={() => setSelectedId(null)} style={styles.backButton}><Text style={styles.backText}>‹</Text></Pressable>
-        <View style={styles.avatar}><Text style={styles.avatarText}>{participant.name.charAt(0).toUpperCase()}</Text></View>
+        {participant.photoURL ? <Image source={{ uri: participant.photoURL }} style={styles.avatar} /> : <View style={styles.avatar}><Text style={styles.avatarText}>{participant.name.charAt(0).toUpperCase()}</Text></View>}
         <View style={styles.headerCopy}>
           <Text numberOfLines={1} style={styles.headerName}>{participant.name}</Text>
           <Text numberOfLines={1} style={styles.headerMeta}>{participant.role} · {selected.listingTitle}</Text>
@@ -151,7 +152,7 @@ export function MessagesPage({ conversations, userId, onBrowse, onBack }: {
       {sortedConversations.map((conversation) => {
         const participant = otherParticipant(conversation, userId);
         return <Pressable accessibilityRole="button" key={conversation.id} onPress={() => setSelectedId(conversation.id)} style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
-          {conversation.listingImage ? <Image source={{ uri: conversation.listingImage }} style={styles.listingImage} /> : <View style={styles.cardAvatar}><Text style={styles.cardAvatarText}>{participant.name.charAt(0).toUpperCase()}</Text></View>}
+          {participant.photoURL ? <Image source={{ uri: participant.photoURL }} style={styles.listingImage} /> : <View style={styles.cardAvatar}><Text style={styles.cardAvatarText}>{participant.name.charAt(0).toUpperCase()}</Text></View>}
           <View style={styles.cardCopy}>
             <View style={styles.nameRow}><Text numberOfLines={1} style={styles.name}>{participant.name}</Text><Text style={styles.timestamp}>{timeLabel(conversation.updatedAt)}</Text></View>
             <Text numberOfLines={1} style={styles.title}>{conversation.listingTitle}</Text>

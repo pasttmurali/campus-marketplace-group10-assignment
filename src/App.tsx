@@ -21,6 +21,7 @@ import {
   query,
   serverTimestamp,
   setDoc,
+  writeBatch,
   where,
 } from "firebase/firestore";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
@@ -29,14 +30,16 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Linking,
   Modal,
   Platform,
   Pressable,
-  SafeAreaView,
+  ScrollView,
   StyleSheet,
   Text,
   View,
 } from "react-native";
+import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { EmptyState } from "./components/EmptyState";
 import { GoogleSignInButton } from "./components/GoogleSignInButton";
 import { SellForm, SellFormValues } from "./components/SellForm";
@@ -48,10 +51,8 @@ import { MyListingsPage } from "./pages/MyListingsPage";
 import { ProfilePage } from "./pages/ProfilePage";
 import { SavedPage } from "./pages/SavedPage";
 import { SellerProfilePage } from "./pages/SellerProfilePage";
-import { seedListings } from "./data";
 import { auth, db, firebaseConfigured, storage } from "./firebase";
 import {
-  getDemoListings,
   normalizeListing,
   updateListing,
   setListingStatus,
@@ -69,15 +70,58 @@ async function registerUser(user: User) {
         user.displayName || user.email?.split("@")[0] || "Campus student",
       email: user.email || "",
       photoURL: user.photoURL || null,
-      campus: "North Campus",
+      campus: "University of Colombo",
       updatedAt: serverTimestamp(),
     },
     { merge: true },
   );
 }
 
-async function confirmStatusChange(nextStatus: Listing["status"]): Promise<boolean> {
-  const action = nextStatus === "sold" ? "mark this item as sold" : "mark this item as available";
+function isLocalImage(uri: string): boolean {
+  return /^(file|content|blob|data):/i.test(uri);
+}
+
+async function uploadFirebaseImage(
+  uri: string,
+  path: string,
+  maxSizeMb: number,
+  fixedFileName?: string,
+): Promise<string> {
+  if (!isLocalImage(uri)) return uri;
+  if (!storage) throw new Error("Firebase Storage is not configured.");
+
+  const response = await fetch(uri);
+  if (!response.ok) throw new Error("Could not read the selected photo.");
+  const photo = await response.blob();
+  if (photo.size > maxSizeMb * 1024 * 1024) {
+    throw new Error(`Choose a photo smaller than ${maxSizeMb} MB.`);
+  }
+
+  const contentType = photo.type || "image/jpeg";
+  const extension = contentType.split("/")[1]?.replace("jpeg", "jpg") || "jpg";
+  const fileName = fixedFileName || `${Date.now()}-${Math.random().toString(36).slice(2)}.${extension}`;
+  const imageRef = ref(storage, `${path}/${fileName}`);
+  await Promise.race([
+    uploadBytes(imageRef, photo, { contentType }),
+    new Promise<never>((_, reject) =>
+      setTimeout(
+        () => reject(new Error("Photo upload failed. Confirm that Firebase Storage is upgraded and its default bucket has been created.")),
+        15000,
+      ),
+    ),
+  ]);
+  return getDownloadURL(imageRef);
+}
+
+async function uploadListingImage(uri: string, userId: string): Promise<string> {
+  return uploadFirebaseImage(uri, `listing-images/${userId}`, 8);
+}
+
+async function confirmStatusChange(nextStatus: Listing["status"], listingType: Listing["listingType"]): Promise<boolean> {
+  const wanted = listingType === "wanted";
+  const action = nextStatus === "sold"
+    ? wanted ? "mark this request as fulfilled" : "mark this item as sold"
+    : wanted ? "mark this request as still needed" : "mark this item as available";
   if (Platform.OS === "web") {
     return window.confirm(`Are you sure you want to ${action}?`);
   }
@@ -92,7 +136,7 @@ async function confirmStatusChange(nextStatus: Listing["status"]): Promise<boole
 export default function App() {
   const [tab, setTab] = useState<Tab>("Explore");
   const [tabHistory, setTabHistory] = useState<Tab[]>([]);
-  const [items, setItems] = useState(getDemoListings);
+  const [items, setItems] = useState<Listing[]>([]);
   const [queryText, setQueryText] = useState("");
   const [category, setCategory] = useState("All items");
   const [minPrice, setMinPrice] = useState("");
@@ -105,12 +149,15 @@ export default function App() {
   const [user, setUser] = useState<User | null>(auth?.currentUser || null);
   const [authOpen, setAuthOpen] = useState(false);
   const [sellOpen, setSellOpen] = useState(false);
+  const [postTypeOpen, setPostTypeOpen] = useState(false);
+  const [newListingType, setNewListingType] = useState<"selling" | "wanted">("selling");
   const [editOpen, setEditOpen] = useState(false);
   const [authError, setAuthError] = useState("");
   const [profileReady, setProfileReady] = useState(false);
   const [profilePhotoURL, setProfilePhotoURL] = useState<string | null>(
     auth?.currentUser?.photoURL || null,
   );
+  const [profilePhone, setProfilePhone] = useState("");
 
   const navigateTo = useCallback((nextTab: Tab) => {
     setTab((currentTab) => {
@@ -171,6 +218,18 @@ export default function App() {
 
   useEffect(() => {
     if (!db || !user) {
+      setProfilePhone("");
+      return;
+    }
+    return onSnapshot(doc(db, "users", user.uid), (snapshot) => {
+      const data = snapshot.data();
+      setProfilePhone(typeof data?.phoneNumber === "string" ? data.phoneNumber : "");
+      if (typeof data?.photoURL === "string") setProfilePhotoURL(data.photoURL);
+    });
+  }, [user]);
+
+  useEffect(() => {
+    if (!db || !user) {
       setSavedIds([]);
       return;
     }
@@ -200,7 +259,7 @@ export default function App() {
 
   useEffect(() => {
     if (!db || !user) {
-      setItems(getDemoListings());
+      setItems([]);
       return;
     }
     const listingsQuery = query(
@@ -213,13 +272,9 @@ export default function App() {
         const liveListings = snapshot.docs.map((entry) =>
           normalizeListing({ id: entry.id, ...entry.data() }),
         );
-        const liveIds = new Set(liveListings.map((listing) => listing.id));
-        const demoListings = getDemoListings().filter(
-          (listing) => !liveIds.has(listing.id),
-        );
-        setItems([...liveListings, ...demoListings]);
+        setItems(liveListings);
       },
-      () => setItems(getDemoListings()),
+      () => setItems([]),
     );
   }, [user]);
 
@@ -302,20 +357,37 @@ export default function App() {
       );
       return;
     }
+    let image = "";
+    let imageUploadFailed = false;
+    if (draft.image.trim()) {
+      try {
+        image = await uploadListingImage(draft.image.trim(), user.uid);
+      } catch {
+        imageUploadFailed = true;
+      }
+    }
     await addDoc(collection(db, "listings"), {
       title: draft.title.trim(),
       price: Number(draft.price),
       category: draft.category,
       seller: user.displayName || user.email || "You",
       sellerId: user.uid,
+      sellerPhone: profilePhone,
+      sellerPhotoURL: profilePhotoURL || "",
       campus: draft.campus,
       condition: draft.condition,
-      image: draft.image.trim() || seedListings[0].image,
+      image,
       description: draft.description.trim(),
+      negotiable: draft.negotiable,
+      urgent: draft.urgent,
+      listingType: draft.listingType,
       status: "available",
       createdAt: serverTimestamp(),
     });
     setSellOpen(false);
+    if (imageUploadFailed) {
+      Alert.alert("Published without photo", "The listing was saved, but the photo could not be uploaded. You can add it later by editing the listing.");
+    }
   };
   const contactSeller = async (listing: Listing | null) => {
     if (!user) {
@@ -350,7 +422,9 @@ export default function App() {
           sellerId: listing.sellerId,
           sellerName: listing.seller,
           buyerName: user.displayName || user.email?.split("@")[0] || "Campus buyer",
-          listingImage: listing.image,
+          ...(listing.sellerPhotoURL ? { sellerPhotoURL: listing.sellerPhotoURL } : {}),
+          ...(profilePhotoURL ? { buyerPhotoURL: profilePhotoURL } : {}),
+          ...(listing.image ? { listingImage: listing.image } : {}),
           updatedAt: serverTimestamp(),
         },
         { merge: true },
@@ -380,6 +454,15 @@ export default function App() {
     if (!selected || !user || selected.sellerId !== user.uid) {
       throw new Error("You can't edit this listing.");
     }
+    let image = values.image.trim();
+    if (image && isLocalImage(image)) {
+      try {
+        image = await uploadListingImage(image, user.uid);
+      } catch {
+        image = selected.image || "";
+        Alert.alert("Saved without new photo", "Your changes were saved, but the new photo could not be uploaded.");
+      }
+    }
     await updateListing(selected.id, {
       title: values.title.trim(),
       price: Number(values.price),
@@ -387,7 +470,10 @@ export default function App() {
       condition: values.condition,
       campus: values.campus,
       description: values.description.trim(),
-      image: values.image.trim() || seedListings[0].image,
+      negotiable: values.negotiable,
+      urgent: values.urgent,
+      listingType: values.listingType,
+      image,
     });
     const updatedFields = {
       title: values.title.trim(),
@@ -396,7 +482,10 @@ export default function App() {
       condition: values.condition,
       campus: values.campus,
       description: values.description.trim(),
-      image: values.image.trim() || seedListings[0].image,
+      image,
+      negotiable: values.negotiable,
+      urgent: values.urgent,
+      listingType: values.listingType,
     };
     setItems((current) =>
       current.map((item) =>
@@ -416,31 +505,31 @@ export default function App() {
   }, []);
 
   const changeProfilePhoto = async (uri: string) => {
-    if (!user || !storage) {
+    if (!user) {
       throw new Error("Sign in before adding a profile photo.");
     }
-
-    const response = await fetch(uri);
-    if (!response.ok) throw new Error("Could not read the selected photo.");
-    const photo = await response.blob();
-    if (photo.size > 5 * 1024 * 1024) {
-      throw new Error("Choose a profile photo smaller than 5 MB.");
-    }
-
     setAuthError("");
-    const photoRef = ref(storage, `profile-photos/${user.uid}/avatar`);
-    await uploadBytes(photoRef, photo, {
-      contentType: photo.type || "image/jpeg",
-    });
-    const photoURL = await getDownloadURL(photoRef);
+    const photoURL = await uploadFirebaseImage(uri, `profile-photos/${user.uid}`, 5, "avatar");
     await updateProfile(user, { photoURL });
     await registerUser(user);
     setProfilePhotoURL(photoURL);
     setProfileReady(true);
   };
+  const saveProfilePhone = async (phoneNumber: string) => {
+    if (!user || !db) throw new Error("Sign in before saving a phone number.");
+    const firestore = db;
+    const cleaned = phoneNumber.replace(/[^0-9+]/g, "");
+    if (cleaned && !/^(?:\+94|0)[0-9]{9}$/.test(cleaned)) throw new Error("Enter a valid Sri Lankan number, for example 0771234567.");
+    await setDoc(doc(firestore, "users", user.uid), { phoneNumber: cleaned, updatedAt: serverTimestamp() }, { merge: true });
+    const batch = writeBatch(firestore);
+    myListings.forEach((listing) => batch.update(doc(firestore, "listings", listing.id), { sellerPhone: cleaned, updatedAt: serverTimestamp() }));
+    await batch.commit();
+    setProfilePhone(cleaned);
+  };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaProvider>
+    <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
       <StatusBar style="dark" />
       {tab === "Explore" && (
         <ExplorePage
@@ -489,7 +578,7 @@ export default function App() {
         <MyListingsPage
           items={myListings}
           onOpen={setSelected}
-          onSell={() => setSellOpen(true)}
+          onSell={() => setPostTypeOpen(true)}
           onBack={goBack}
         />
       )}
@@ -497,6 +586,7 @@ export default function App() {
         <ProfilePage
           user={user}
           photoURL={profilePhotoURL}
+          phoneNumber={profilePhone}
           savedCount={savedIds.length}
           listingCount={myListings.length}
           firebaseConfigured={firebaseConfigured}
@@ -507,6 +597,7 @@ export default function App() {
           onSignIn={() => setAuthOpen(true)}
           onSignOut={() => auth && signOut(auth)}
           onChangePhoto={changeProfilePhoto}
+          onSavePhone={saveProfilePhone}
           onBack={goBack}
         />
       )}
@@ -528,13 +619,19 @@ export default function App() {
         tab={tab}
         savedCount={savedIds.length}
         onChange={navigateTo}
-        onSell={() => setSellOpen(true)}
+        onSell={() => setPostTypeOpen(true)}
       />
       <ListingModal
         item={selected}
         user={user}
         onClose={() => setSelected(null)}
         onContact={() => contactSeller(selected)}
+        onCall={async () => {
+          if (!selected?.sellerPhone) return Alert.alert("Phone number unavailable", "This user has not added a phone number to their profile.");
+          const url = `tel:${selected.sellerPhone}`;
+          if (await Linking.canOpenURL(url)) await Linking.openURL(url);
+          else Alert.alert("Calling unavailable", "This device cannot open the phone app.");
+        }}
         onStatusChange={changeListingStatus}
         onEdit={() => setEditOpen(true)}
         onViewSeller={(item) => {
@@ -561,12 +658,45 @@ export default function App() {
         onError={setAuthError}
         error={authError}
       />
+      <PostTypeModal
+        visible={postTypeOpen}
+        onClose={() => setPostTypeOpen(false)}
+        onChoose={(type) => {
+          setNewListingType(type);
+          setPostTypeOpen(false);
+          setSellOpen(true);
+        }}
+      />
       <SellForm
         visible={sellOpen}
+        listingType={newListingType}
         onClose={() => setSellOpen(false)}
         onSubmit={publish}
       />
     </SafeAreaView>
+    </SafeAreaProvider>
+  );
+}
+
+function PostTypeModal({ visible, onClose, onChoose }: { visible: boolean; onClose: () => void; onChoose: (type: "selling" | "wanted") => void }) {
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={styles.backdrop}>
+        <View style={styles.postChoice}>
+          <Text style={styles.formTitle}>What would you like to post?</Text>
+          <Text style={styles.choiceHint}>Choose whether you are selling something or looking for an item.</Text>
+          <Pressable style={styles.choiceCard} onPress={() => onChoose("selling")}>
+            <Text style={styles.choiceIcon}>₹</Text>
+            <View><Text style={styles.choiceTitle}>Sell an item</Text><Text style={styles.choiceText}>Post something you want to sell</Text></View>
+          </Pressable>
+          <Pressable style={[styles.choiceCard, styles.wantedChoice]} onPress={() => onChoose("wanted")}>
+            <Text style={styles.choiceIcon}>⌕</Text>
+            <View><Text style={styles.choiceTitle}>I need an item</Text><Text style={styles.choiceText}>Ask the campus community for it</Text></View>
+          </Pressable>
+          <Pressable style={styles.outline} onPress={onClose}><Text style={styles.outlineText}>Cancel</Text></Pressable>
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -604,7 +734,7 @@ function BottomNav({
       />
       <Pressable style={styles.sellButton} onPress={onSell}>
         <Text style={styles.sellPlus}>＋</Text>
-        <Text style={styles.sellText}>Sell</Text>
+        <Text style={styles.sellText}>Post</Text>
       </Pressable>
     </View>
   );
@@ -641,6 +771,7 @@ function ListingModal({
   user,
   onClose,
   onContact,
+  onCall,
   onStatusChange,
   onEdit,
   onViewSeller,
@@ -649,6 +780,7 @@ function ListingModal({
   user: User | null;
   onClose: () => void;
   onContact: () => void;
+  onCall: () => void;
   onStatusChange: (id: string, status: Listing["status"]) => Promise<void>;
   onEdit: () => void;
   onViewSeller: (item: Listing) => void;
@@ -666,7 +798,7 @@ function ListingModal({
     if (!item || !isOwner || savingStatus) return;
     const nextStatus: Listing["status"] =
       item.status === "sold" ? "available" : "sold";
-    if (!(await confirmStatusChange(nextStatus))) return;
+    if (!(await confirmStatusChange(nextStatus, item.listingType))) return;
     setSavingStatus(true);
     setStatusError("");
     try {
@@ -690,31 +822,34 @@ function ListingModal({
       {item && (
         <View style={styles.backdrop}>
           <View style={styles.detail}>
-            <Image
-              source={{ uri: item.image }}
-              style={[
-                styles.detailImage,
-                item.status === "sold" && styles.soldDetailImage,
-              ]}
-            />
+            {item.image ? <Image source={{ uri: item.image }} style={[styles.detailImage, item.status === "sold" && styles.soldDetailImage]} /> : <View style={[styles.detailImage, styles.noDetailImage]}><Text style={styles.noDetailImageIcon}>◎</Text><Text style={styles.noDetailImageText}>No photo available</Text></View>}
             {item.status === "sold" ? <SoldBadge /> : null}
             <Pressable style={styles.close} onPress={onClose}>
               <Text style={styles.closeText}>×</Text>
             </Pressable>
-            <View style={styles.detailBody}>
+            <ScrollView contentContainerStyle={styles.detailBody} showsVerticalScrollIndicator={false}>
               <Text style={styles.detailCategory}>
-                {item.category.toUpperCase()}
+                {item.listingType === "wanted" ? "WANTED" : "FOR SALE"} · {item.category.toUpperCase()}
               </Text>
               <Text style={styles.detailTitle}>{item.title}</Text>
-              <Text style={styles.detailPrice}>${item.price}</Text>
+              <View style={styles.detailPriceRow}>
+                <Text style={styles.detailPrice}>Rs. {item.price.toLocaleString()}</Text>
+                {item.negotiable ? <Text style={styles.detailNegotiable}>Negotiable</Text> : null}
+                {item.urgent ? <Text style={styles.detailUrgent}>{item.listingType === "wanted" ? "URGENTLY NEEDED" : "URGENT SALE"}</Text> : null}
+              </View>
               <Text style={styles.muted}>
                 {item.condition} · {item.campus}
               </Text>
-              <Pressable onPress={() => onViewSeller(item)}>
-                <Text style={styles.sellerLink}>
-                  View seller profile · {item.seller}
-                </Text>
+              <Pressable style={styles.sellerRow} onPress={() => onViewSeller(item)}>
+                {item.sellerPhotoURL ? <Image source={{ uri: item.sellerPhotoURL }} style={styles.sellerAvatar} /> : <View style={styles.sellerAvatarFallback}><Text style={styles.sellerAvatarText}>{item.seller.trim().charAt(0).toUpperCase() || "?"}</Text></View>}
+                <View><Text style={styles.sellerCaption}>{item.listingType === "wanted" ? "Requested by" : "For sale by"}</Text><Text style={styles.sellerLink}>{item.seller}</Text></View>
               </Pressable>
+              <View style={styles.factGrid}>
+                <Text style={styles.factLabel}>Category</Text><Text style={styles.factValue}>{item.category}</Text>
+                <Text style={styles.factLabel}>Condition</Text><Text style={styles.factValue}>{item.condition}</Text>
+                <Text style={styles.factLabel}>Campus</Text><Text style={styles.factValue}>{item.campus}</Text>
+              </View>
+              <Text style={styles.descriptionHeading}>Description</Text>
               <Text style={styles.description}>{item.description}</Text>
               {isOwner ? (
                 <View>
@@ -731,27 +866,24 @@ function ListingModal({
                     ) : (
                       <Text style={styles.outlineText}>
                         {item.status === "sold"
-                          ? "Mark as available"
-                          : "Mark as sold"}
+                          ? item.listingType === "wanted" ? "Still needed" : "Mark as available"
+                          : item.listingType === "wanted" ? "Mark as found" : "Mark as sold"}
                       </Text>
                     )}
                   </Pressable>
                 </View>
               ) : item.status === "sold" ? (
-                <Text style={styles.soldMessage}>This item has been sold</Text>
+                <Text style={styles.soldMessage}>{item.listingType === "wanted" ? "This request has been fulfilled" : "This item has been sold"}</Text>
               ) : (
-                <Pressable style={styles.primary} onPress={onContact}>
-                  <Text style={styles.primaryText}>
-                    {user
-                      ? `Message ${item.seller}`
-                      : "Sign in to contact seller"}
-                  </Text>
-                </Pressable>
+                <View style={styles.contactActions}>
+                  <Pressable style={[styles.contactButton, !item.sellerPhone && styles.contactButtonDisabled]} onPress={onCall}><Text style={styles.contactButtonText}>☎  Call</Text></Pressable>
+                  <Pressable style={styles.contactButton} onPress={onContact}><Text style={styles.contactButtonText}>{user ? "●  Message" : "Sign in"}</Text></Pressable>
+                </View>
               )}
               {statusError ? (
                 <Text style={styles.statusError}>{statusError}</Text>
               ) : null}
-            </View>
+            </ScrollView>
           </View>
         </View>
       )}
@@ -853,9 +985,13 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     overflow: "hidden",
+    maxHeight: "94%",
   },
   detailImage: { width: "100%", height: 230 },
   soldDetailImage: { opacity: 0.62 },
+  noDetailImage: { alignItems: "center", backgroundColor: "#E5ECE5", justifyContent: "center" },
+  noDetailImageIcon: { color: "#8EA097", fontSize: 40 },
+  noDetailImageText: { color: "#71847A", fontSize: 12, fontWeight: "700", marginTop: 6 },
   close: {
     position: "absolute",
     top: 14,
@@ -887,19 +1023,34 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     marginTop: 8,
   },
+  detailPriceRow: { alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  detailNegotiable: { color: "#23775D", fontSize: 11, fontWeight: "800", marginTop: 8 },
+  detailUrgent: { backgroundColor: "#C3535B", borderRadius: 6, color: "#FFF", fontSize: 10, fontWeight: "900", marginTop: 8, overflow: "hidden", paddingHorizontal: 7, paddingVertical: 4 },
   muted: { color: "#87918C", fontSize: 12 },
   sellerLink: {
     color: "#23775D",
     fontSize: 13,
     fontWeight: "800",
-    marginTop: 10,
   },
+  sellerRow: { alignItems: "center", borderBottomColor: "#E7ECE8", borderBottomWidth: 1, borderTopColor: "#E7ECE8", borderTopWidth: 1, flexDirection: "row", marginTop: 18, paddingVertical: 14 },
+  sellerAvatar: { borderRadius: 23, height: 46, marginRight: 12, width: 46 },
+  sellerAvatarFallback: { alignItems: "center", backgroundColor: "#E0E7FF", borderRadius: 23, height: 46, justifyContent: "center", marginRight: 12, width: 46 },
+  sellerAvatarText: { color: "#1F5D4C", fontSize: 18, fontWeight: "800" },
+  sellerCaption: { color: "#87918C", fontSize: 11 },
+  factGrid: { flexDirection: "row", flexWrap: "wrap", marginTop: 18 },
+  factLabel: { color: "#7A8781", fontSize: 13, marginBottom: 9, width: "35%" },
+  factValue: { color: "#263A33", fontSize: 13, fontWeight: "600", marginBottom: 9, width: "65%" },
+  descriptionHeading: { color: "#173C34", fontSize: 16, fontWeight: "800", marginTop: 12 },
   description: {
     color: "#66736D",
     fontSize: 14,
     lineHeight: 21,
     marginVertical: 20,
   },
+  contactActions: { flexDirection: "row", gap: 10 },
+  contactButton: { alignItems: "center", backgroundColor: "#159B78", borderRadius: 10, flex: 1, justifyContent: "center", minHeight: 50 },
+  contactButtonDisabled: { opacity: 0.45 },
+  contactButtonText: { color: "#FFF", fontSize: 14, fontWeight: "800" },
   soldMessage: {
     color: "#B64950",
     backgroundColor: "#FBECEE",
@@ -924,6 +1075,13 @@ const styles = StyleSheet.create({
   },
   primaryText: { color: "#FFF", fontWeight: "800" },
   auth: { backgroundColor: "#FFF", borderRadius: 20, padding: 24, margin: 20 },
+  postChoice: { backgroundColor: "#FFF", borderRadius: 20, margin: 20, padding: 24 },
+  choiceHint: { color: "#87918C", lineHeight: 20, marginBottom: 8, marginTop: 8 },
+  choiceCard: { alignItems: "center", backgroundColor: "#EDF5EF", borderColor: "#BCD0C3", borderRadius: 14, borderWidth: 1, flexDirection: "row", gap: 14, marginTop: 14, minHeight: 72, padding: 14 },
+  wantedChoice: { backgroundColor: "#EEF4FC", borderColor: "#B8CAE2" },
+  choiceIcon: { color: "#1F5D4C", fontSize: 24, fontWeight: "900", width: 28 },
+  choiceTitle: { color: "#173C34", fontSize: 15, fontWeight: "800" },
+  choiceText: { color: "#87918C", fontSize: 12, marginTop: 3 },
   formTitle: { color: "#173C34", fontSize: 22, fontWeight: "800" },
   authMessage: { color: "#87918C", lineHeight: 20, marginTop: 10 },
   authError: {

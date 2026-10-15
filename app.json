@@ -26,7 +26,7 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow Campus Marketplace to choose a profile photo."
+          "photosPermission": "Allow Campus Marketplace to choose profile and listing photos from your device."
         }
       ]
     ],

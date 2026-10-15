@@ -31,8 +31,8 @@ export function MyListingsPage({
         ListEmptyComponent={
           <EmptyState
             title="No listings yet"
-            message="Publish an item and it will appear here."
-            action="Sell an item"
+            message="Post an item for sale or something you need."
+            action="Create a post"
             onAction={onSell}
           />
         }

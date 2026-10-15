@@ -16,7 +16,7 @@ service cloud.firestore {
         && (value.matches('^https://.*') || value.matches('^http://.*'));
     }
     function validUser(data) {
-      return data.keys().hasOnly(['uid','displayName','email','photoURL','campus','updatedAt'])
+      return data.keys().hasOnly(['uid','displayName','email','photoURL','campus','phoneNumber','updatedAt'])
         && data.keys().hasAll(['uid','displayName','email','photoURL','campus','updatedAt'])
         && data.uid is string && data.uid.size() >= 20 && data.uid.size() <= 128
         && data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 80
@@ -24,20 +24,26 @@ service cloud.firestore {
         && data.email.matches('^[^@]+@[^@]+[.][^@]+$')
         && (data.photoURL == null || validUrl(data.photoURL))
         && data.campus is string && data.campus.size() >= 1 && data.campus.size() <= 100
+        && (!('phoneNumber' in data) || (data.phoneNumber is string && data.phoneNumber.size() <= 13))
         && recent(data.updatedAt);
     }
     function validListing(data) {
-      return data.keys().hasOnly(['title','price','category','seller','sellerId','campus','condition','image','description','status','createdAt','updatedAt','soldAt'])
+      return data.keys().hasOnly(['title','price','category','seller','sellerId','sellerPhone','sellerPhotoURL','campus','condition','image','description','negotiable','urgent','listingType','status','createdAt','updatedAt','soldAt'])
         && data.keys().hasAll(['title','price','category','seller','sellerId','campus','condition','image','description','status','createdAt'])
         && data.title is string && data.title.size() >= 2 && data.title.size() <= 120
         && data.price is number && data.price >= 0 && data.price <= 1000000
-        && data.category is string && data.category in ['Textbooks','Furniture','Tech','Fashion']
+        && data.category is string && data.category in ['Textbooks','Furniture','Tech','Fashion','Vehicles','Kitchen Items','Other']
         && data.seller is string && data.seller.size() >= 1 && data.seller.size() <= 80
         && data.sellerId is string && data.sellerId.size() >= 20 && data.sellerId.size() <= 128
+        && (!('sellerPhone' in data) || (data.sellerPhone is string && data.sellerPhone.size() <= 13))
+        && (!('sellerPhotoURL' in data) || data.sellerPhotoURL == '' || validUrl(data.sellerPhotoURL))
         && data.campus is string && data.campus.size() >= 1 && data.campus.size() <= 100
         && data.condition is string && data.condition.size() >= 1 && data.condition.size() <= 80
-        && validUrl(data.image)
+        && data.image is string && (data.image == '' || validUrl(data.image))
         && data.description is string && data.description.size() <= 2000
+        && (!('negotiable' in data) || data.negotiable is bool)
+        && (!('urgent' in data) || data.urgent is bool)
+        && (!('listingType' in data) || data.listingType in ['selling','wanted'])
         && data.status in ['available','sold'] && data.createdAt is timestamp
         && (!('updatedAt' in data) || data.updatedAt is timestamp)
         && (!('soldAt' in data) || data.soldAt == null || data.soldAt is timestamp);
@@ -48,7 +54,7 @@ service cloud.firestore {
         && data.listingId == listingId && data.userId == uid && recent(data.createdAt);
     }
     function validConversation(data) {
-      return data.keys().hasOnly(['listingId','listingTitle','memberIds','buyerId','sellerId','sellerName','buyerName','listingImage','lastMessage','lastSenderId','lastMessageId','updatedAt'])
+      return data.keys().hasOnly(['listingId','listingTitle','memberIds','buyerId','sellerId','sellerName','buyerName','sellerPhotoURL','buyerPhotoURL','listingImage','lastMessage','lastSenderId','lastMessageId','updatedAt'])
         && data.keys().hasAll(['listingId','listingTitle','memberIds','buyerId','sellerId','sellerName','updatedAt'])
         && data.listingId is string && data.listingId.size() >= 1 && data.listingId.size() <= 128
         && data.listingTitle is string && data.listingTitle.size() >= 1 && data.listingTitle.size() <= 120
@@ -58,6 +64,8 @@ service cloud.firestore {
         && data.buyerId != data.sellerId && data.buyerId in data.memberIds && data.sellerId in data.memberIds
         && data.sellerName is string && data.sellerName.size() >= 1 && data.sellerName.size() <= 80
         && (!('buyerName' in data) || (data.buyerName is string && data.buyerName.size() >= 1 && data.buyerName.size() <= 80))
+        && (!('sellerPhotoURL' in data) || validUrl(data.sellerPhotoURL))
+        && (!('buyerPhotoURL' in data) || validUrl(data.buyerPhotoURL))
         && (!('listingImage' in data) || validUrl(data.listingImage))
         && (!('lastMessage' in data) || (data.lastMessage is string && data.lastMessage.size() >= 1 && data.lastMessage.size() <= 2000))
         && (!('lastSenderId' in data) || (data.lastSenderId is string && data.lastSenderId in data.memberIds))

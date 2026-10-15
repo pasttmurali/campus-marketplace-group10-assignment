@@ -16,11 +16,10 @@ export function ListingCard({
   return (
     <Pressable style={styles.card} onPress={onOpen}>
       <View style={styles.photo}>
-        <Image
-          source={{ uri: item.image }}
-          style={[styles.image, item.status === "sold" && styles.soldImage]}
-        />
+        {item.image ? <Image source={{ uri: item.image }} style={[styles.image, item.status === "sold" && styles.soldImage]} /> : <View style={styles.noImage}><Text style={styles.noImageIcon}>◎</Text><Text style={styles.noImageText}>No photo</Text></View>}
         {item.status === "sold" ? <SoldBadge /> : null}
+        <Text style={[styles.typeBadge, item.listingType === "wanted" && styles.wantedBadge]}>{item.listingType === "wanted" ? "WANTED" : "FOR SALE"}</Text>
+        {item.urgent && item.status !== "sold" ? <Text style={styles.urgent}>URGENT</Text> : null}
         <Pressable
           accessibilityLabel={saved ? "Remove saved item" : "Save item"}
           style={styles.save}
@@ -36,7 +35,7 @@ export function ListingCard({
           <Text style={styles.title} numberOfLines={2}>
             {item.title}
           </Text>
-          <Text style={styles.price}>${item.price}</Text>
+          <View style={styles.priceBlock}><Text style={styles.price}>Rs. {item.price.toLocaleString()}</Text>{item.negotiable ? <Text style={styles.negotiable}>Negotiable</Text> : null}</View>
         </View>
         <Text style={styles.muted}>
           {item.condition} · {item.campus}
@@ -58,6 +57,9 @@ const styles = StyleSheet.create({
   },
   photo: { height: 148, backgroundColor: "#E5ECE5" },
   image: { width: "100%", height: "100%" },
+  noImage: { alignItems: "center", flex: 1, justifyContent: "center" },
+  noImageIcon: { color: "#9AABA2", fontSize: 28 },
+  noImageText: { color: "#87918C", fontSize: 11, fontWeight: "700", marginTop: 4 },
   soldImage: { opacity: 0.62 },
   save: {
     position: "absolute",
@@ -72,6 +74,9 @@ const styles = StyleSheet.create({
   },
   heart: { color: "#365B4C", fontSize: 21 },
   red: { color: "#C3535B" },
+  urgent: { backgroundColor: "#C3535B", borderRadius: 6, color: "#FFF", fontSize: 9, fontWeight: "900", left: 9, overflow: "hidden", paddingHorizontal: 7, paddingVertical: 4, position: "absolute", top: 10 },
+  typeBadge: { backgroundColor: "#1F5D4C", borderRadius: 6, bottom: 9, color: "#FFF", fontSize: 9, fontWeight: "900", left: 9, overflow: "hidden", paddingHorizontal: 7, paddingVertical: 4, position: "absolute" },
+  wantedBadge: { backgroundColor: "#3567A8" },
   body: { padding: 12 },
   row: { flexDirection: "row", justifyContent: "space-between", gap: 5 },
   title: {
@@ -83,6 +88,8 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   price: { color: "#1C7057", fontSize: 14, fontWeight: "800" },
+  priceBlock: { alignItems: "flex-end" },
+  negotiable: { color: "#87918C", fontSize: 9, fontWeight: "700" },
   muted: { color: "#87918C", fontSize: 12 },
   tiny: { color: "#A0AAA4", fontSize: 10, marginTop: 5 },
 });

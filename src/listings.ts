@@ -1,11 +1,9 @@
 import {
   getDoc,
   serverTimestamp,
-  Timestamp,
   updateDoc,
 } from "firebase/firestore";
 import type { DocumentData } from "firebase/firestore";
-import { seedListings } from "./data";
 import { auth, firebaseConfigured, listingDocument } from "./firebase";
 import { Listing } from "./types";
 
@@ -19,27 +17,24 @@ export type ListingUpdateFields = Partial<
     | "condition"
     | "image"
     | "description"
+    | "negotiable"
+    | "urgent"
+    | "listingType"
   >
 >;
 
-const demoUserId = "demo-user";
-const demoListings: Listing[] = seedListings.map((listing) => ({
-  ...listing,
-  sellerId: listing.sellerId || demoUserId,
-  status: listing.status || "available",
-}));
-
 export function normalizeListing(listing: { id: string } & DocumentData): Listing {
-  return { ...listing, status: listing.status || "available" } as Listing;
-}
-
-export function getDemoListings(): Listing[] {
-  return demoListings.map((listing) => normalizeListing({ ...listing }));
+  return {
+    ...listing,
+    negotiable: listing.negotiable === true,
+    urgent: listing.urgent === true,
+    listingType: listing.listingType === "wanted" ? "wanted" : "selling",
+    status: listing.status || "available",
+  } as Listing;
 }
 
 function currentUserId(): string | null {
-  if (firebaseConfigured) return auth?.currentUser?.uid || null;
-  return demoUserId;
+  return firebaseConfigured ? auth?.currentUser?.uid || null : null;
 }
 
 function assertOwner(sellerId: string | undefined): void {
@@ -48,12 +43,6 @@ function assertOwner(sellerId: string | undefined): void {
   if (uid !== sellerId) {
     throw new Error("Only the seller can manage this listing.");
   }
-}
-
-function demoListingIndex(id: string): number {
-  const index = demoListings.findIndex((listing) => listing.id === id);
-  if (index < 0) throw new Error("Listing not found.");
-  return index;
 }
 
 export async function updateListing(
@@ -70,13 +59,7 @@ export async function updateListing(
     return;
   }
 
-  const index = demoListingIndex(id);
-  assertOwner(demoListings[index].sellerId);
-  demoListings[index] = normalizeListing({
-    ...demoListings[index],
-    ...fields,
-    updatedAt: Timestamp.now(),
-  });
+  throw new Error("Firebase is not configured.");
 }
 
 export async function setListingStatus(
@@ -97,12 +80,5 @@ export async function setListingStatus(
     return;
   }
 
-  const index = demoListingIndex(id);
-  assertOwner(demoListings[index].sellerId);
-  demoListings[index] = {
-    ...demoListings[index],
-    status,
-    soldAt: status === "sold" ? Timestamp.now() : null,
-    updatedAt: Timestamp.now(),
-  };
+  throw new Error("Firebase is not configured.");
 }
