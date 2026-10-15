@@ -26,6 +26,7 @@ Campus Marketplace is a cross-platform marketplace application for students to d
 - Signed-in user name, email, and profile state.
 - Editable profile photo selected from the device gallery.
 - Profile photo upload through Firebase Storage.
+- Listing photos selected from the device gallery and saved to Firebase Storage.
 - Secure sign-out.
 
 ### Marketplace discovery
@@ -56,7 +57,7 @@ Campus Marketplace is a cross-platform marketplace application for students to d
   - campus;
   - description;
   - optional image URL.
-- Paste a publicly accessible HTTP(S) image URL to preview a listing photo; the URL is stored directly with the listing, without uploading the image to Firebase Storage.
+- Choose a photo from the device or paste a publicly accessible HTTP(S) image URL. Device photos are uploaded to Firebase Storage; the resulting download URL is saved with the listing in Firestore.
 - Field-level validation before publishing.
 - View all listings owned by the signed-in seller.
 - Edit every listing field through a pre-filled form.
@@ -119,9 +120,9 @@ Campus Marketplace is a cross-platform marketplace application for students to d
 | Language | TypeScript 6 | Static typing and safer refactoring |
 | Authentication | Firebase Authentication | Google Sign-In and authenticated user sessions |
 | Database | Cloud Firestore Enterprise (Native mode) | Listings, profiles, saved items, conversations, and real-time messages |
-| File storage | Firebase Storage | User profile-photo uploads |
+| File storage | Firebase Storage | User profile and listing photos; Firestore stores their download URLs |
 | OAuth support | Expo Auth Session and Expo Web Browser | Google OAuth flows across web and native platforms |
-| Media selection | Expo Image Picker | Selects editable profile photos from a device |
+| Media selection | Expo Image Picker | Selects profile and listing photos from a device |
 | Testing | Node test runner through TSX | Automated listing-filter tests |
 | Package management | Node.js and npm | Dependency and script management |
 | Version control | Git and GitHub | Feature branches and integration workflow |

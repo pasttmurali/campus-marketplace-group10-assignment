@@ -24,7 +24,11 @@ import {
   writeBatch,
   where,
 } from "firebase/firestore";
-import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
+import {
+  getDownloadURL,
+  ref,
+  uploadBytesResumable,
+} from "firebase/storage";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -59,6 +63,7 @@ import {
 } from "./listings";
 import { Conversation, Listing, ListingSortOrder, Tab } from "./types";
 import { filterListings } from "./utils/filterListings";
+import { isLocalImage } from "./utils/validateImageUrl";
 
 async function registerUser(user: User) {
   if (!db) return;
@@ -75,10 +80,6 @@ async function registerUser(user: User) {
     },
     { merge: true },
   );
-}
-
-function isLocalImage(uri: string): boolean {
-  return /^(file|content|blob|data):/i.test(uri);
 }
 
 async function uploadFirebaseImage(
@@ -101,16 +102,22 @@ async function uploadFirebaseImage(
   const extension = contentType.split("/")[1]?.replace("jpeg", "jpg") || "jpg";
   const fileName = fixedFileName || `${Date.now()}-${Math.random().toString(36).slice(2)}.${extension}`;
   const imageRef = ref(storage, `${path}/${fileName}`);
-  await Promise.race([
-    uploadBytes(imageRef, photo, { contentType }),
-    new Promise<never>((_, reject) =>
-      setTimeout(
-        () => reject(new Error("Photo upload failed. Confirm that Firebase Storage is upgraded and its default bucket has been created.")),
-        15000,
-      ),
-    ),
-  ]);
-  return getDownloadURL(imageRef);
+  try {
+    const upload = uploadBytesResumable(imageRef, photo, { contentType });
+    await new Promise<void>((resolve, reject) => {
+      upload.on("state_changed", undefined, reject, resolve);
+    });
+    return await getDownloadURL(imageRef);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `Photo upload failed: ${detail}. Check that Firebase Storage is enabled, EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET matches the bucket, and storage.rules are deployed.`,
+    );
+  }
+}
+
+async function uploadListingImage(uri: string, userId: string): Promise<string> {
+  return uploadFirebaseImage(uri, `listing-images/${userId}`, 8);
 }
 
 async function confirmStatusChange(nextStatus: Listing["status"], listingType: Listing["listingType"]): Promise<boolean> {
@@ -353,6 +360,10 @@ export default function App() {
       );
       return;
     }
+    const image = draft.image.trim();
+    const savedImage = image && isLocalImage(image)
+      ? await uploadListingImage(image, user.uid)
+      : image;
     await addDoc(collection(db, "listings"), {
       title: draft.title.trim(),
       price: Number(draft.price),
@@ -363,7 +374,7 @@ export default function App() {
       sellerPhotoURL: profilePhotoURL || "",
       campus: draft.campus,
       condition: draft.condition,
-      image: draft.image.trim(),
+      image: savedImage,
       description: draft.description.trim(),
       negotiable: draft.negotiable,
       urgent: draft.urgent,
@@ -438,7 +449,10 @@ export default function App() {
     if (!selected || !user || selected.sellerId !== user.uid) {
       throw new Error("You can't edit this listing.");
     }
-    const image = values.image.trim();
+    const selectedImage = values.image.trim();
+    const image = selectedImage && isLocalImage(selectedImage)
+      ? await uploadListingImage(selectedImage, user.uid)
+      : selectedImage;
     await updateListing(selected.id, {
       title: values.title.trim(),
       price: Number(values.price),
