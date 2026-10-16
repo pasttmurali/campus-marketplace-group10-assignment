@@ -1,0 +1,46 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "users": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid",
+        ".validate": "newData.hasChildren(['uid', 'displayName', 'email', 'campus', 'updatedAt']) && newData.child('uid').val() === auth.uid && newData.child('displayName').isString() && newData.child('displayName').val().length <= 80 && newData.child('email').isString() && newData.child('email').val().length <= 254 && newData.child('campus').isString() && newData.child('updatedAt').isNumber()",
+        "saved": {
+          "$listingId": {
+            ".validate": "newData.hasChildren(['listingId', 'userId', 'createdAt']) && newData.child('listingId').val() === $listingId && newData.child('userId').val() === auth.uid && newData.child('createdAt').isNumber()"
+          }
+        }
+      }
+    },
+    "listings": {
+      ".read": true,
+      "$listingId": {
+        ".write": "auth != null && ((!data.exists() && newData.child('sellerId').val() === auth.uid) || (data.exists() && data.child('sellerId').val() === auth.uid && newData.child('sellerId').val() === auth.uid))",
+        ".validate": "!newData.exists() || (newData.hasChildren(['title', 'price', 'category', 'seller', 'sellerId', 'campus', 'condition', 'image', 'description', 'status', 'createdAt']) && newData.child('title').isString() && newData.child('title').val().length >= 2 && newData.child('title').val().length <= 120 && newData.child('price').isNumber() && newData.child('price').val() >= 0 && newData.child('price').val() <= 1000000 && newData.child('sellerId').val() === auth.uid && newData.child('status').val().matches(/^(available|sold)$/) && newData.child('createdAt').isNumber())"
+      }
+    },
+    "userConversations": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        "$conversationId": {
+          ".write": "auth != null && (root.child('conversations').child($conversationId).child('buyerId').val() === auth.uid || root.child('conversations').child($conversationId).child('sellerId').val() === auth.uid) && (root.child('conversations').child($conversationId).child('buyerId').val() === $uid || root.child('conversations').child($conversationId).child('sellerId').val() === $uid)",
+          ".validate": "newData.val() === true"
+        }
+      }
+    },
+    "conversations": {
+      "$conversationId": {
+        ".read": "auth != null && (data.child('buyerId').val() === auth.uid || data.child('sellerId').val() === auth.uid)",
+        ".write": "auth != null && ((!data.exists() && newData.child('buyerId').val() === auth.uid && newData.child('sellerId').isString()) || (data.exists() && (data.child('buyerId').val() === auth.uid || data.child('sellerId').val() === auth.uid)))",
+        ".validate": "newData.hasChildren(['listingId', 'listingTitle', 'buyerId', 'sellerId', 'sellerName', 'updatedAt']) && (!data.exists() || (newData.child('buyerId').val() === data.child('buyerId').val() && newData.child('sellerId').val() === data.child('sellerId').val())) && newData.child('buyerId').val() !== newData.child('sellerId').val() && newData.child('updatedAt').isNumber()",
+        "messages": {
+          "$messageId": {
+            ".validate": "newData.hasChildren(['senderId', 'text', 'createdAt']) && ((data.exists() && data.child('senderId').val() === auth.uid && newData.child('senderId').val() === auth.uid && newData.child('createdAt').val() === data.child('createdAt').val()) || (!data.exists() && newData.child('senderId').val() === auth.uid)) && newData.child('text').isString() && newData.child('text').val().length <= 2000 && newData.child('createdAt').isNumber()"
+          }
+        }
+      }
+    }
+  }
+}

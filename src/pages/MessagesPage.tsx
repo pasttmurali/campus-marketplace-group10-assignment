@@ -3,11 +3,15 @@ import { ActivityIndicator, Alert, Image, Platform, Pressable, ScrollView, Style
 import { EmptyState } from "../components/EmptyState";
 import { PageTitle } from "../components/PageTitle";
 import { deleteConversationMessage, editConversationMessage, sendConversationMessage, subscribeToMessages } from "../messages";
-import { Conversation, Message } from "../types";
+import { Conversation, Message, StoredTimestamp } from "../types";
 
-function timeLabel(value?: { toDate: () => Date } | null) {
+function timestampMillis(value?: StoredTimestamp | null) {
+  return typeof value === "number" ? value : value?.toMillis() || 0;
+}
+
+function timeLabel(value?: StoredTimestamp | null) {
   if (!value) return "Now";
-  const date = value.toDate();
+  const date = new Date(timestampMillis(value));
   return date.toDateString() === new Date().toDateString()
     ? date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
     : date.toLocaleDateString([], { month: "short", day: "numeric" });
@@ -22,9 +26,11 @@ function otherParticipant(conversation: Conversation, userId: string) {
   };
 }
 
-export function MessagesPage({ conversations, userId, onBrowse, onBack }: {
+export function MessagesPage({ conversations, userId, conversationToOpen, onConversationOpened, onBrowse, onBack }: {
   conversations: Conversation[];
   userId: string | null;
+  conversationToOpen: string | null;
+  onConversationOpened: () => void;
   onBrowse: () => void;
   onBack: () => void;
 }) {
@@ -38,9 +44,15 @@ export function MessagesPage({ conversations, userId, onBrowse, onBack }: {
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const scrollRef = useRef<ScrollView>(null);
   const sortedConversations = useMemo(() => [...conversations].sort(
-    (a, b) => (b.updatedAt?.toMillis() || 0) - (a.updatedAt?.toMillis() || 0),
+    (a, b) => timestampMillis(b.updatedAt) - timestampMillis(a.updatedAt),
   ), [conversations]);
   const selected = conversations.find((item) => item.id === selectedId) || null;
+
+  useEffect(() => {
+    if (!conversationToOpen) return;
+    setSelectedId(conversationToOpen);
+    onConversationOpened();
+  }, [conversationToOpen, onConversationOpened]);
 
   useEffect(() => {
     if (!selectedId) { setMessages([]); return; }
@@ -124,7 +136,7 @@ export function MessagesPage({ conversations, userId, onBrowse, onBack }: {
           const mine = message.senderId === userId;
           return <View key={message.id} style={[styles.messageRow, mine && styles.myMessageRow]}>
             <Pressable disabled={!mine || Boolean(message.deletedAt)} onPress={() => setActiveMessageId(activeMessageId === message.id ? null : message.id)} onLongPress={() => setActiveMessageId(message.id)} style={[styles.bubble, mine ? styles.myBubble : styles.theirBubble]}>
-              <Text style={[styles.messageText, mine && styles.myMessageText, message.deletedAt && styles.deletedText]}>{message.deletedAt ? "This message was deleted" : message.text}</Text>
+              <Text style={[styles.messageText, mine && styles.myMessageText, Boolean(message.deletedAt) && styles.deletedText]}>{message.deletedAt ? "This message was deleted" : message.text}</Text>
               <Text style={[styles.messageTime, mine && styles.myMessageTime]}>{message.editedAt && !message.deletedAt ? "edited · " : ""}{timeLabel(message.createdAt)}</Text>
             </Pressable>
             {mine && activeMessageId === message.id && !message.deletedAt ? <View style={styles.messageActions}>

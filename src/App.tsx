@@ -1,10 +1,13 @@
 import { StatusBar } from "expo-status-bar";
 import {
+  createUserWithEmailAndPassword,
   GoogleAuthProvider,
   browserLocalPersistence,
   getRedirectResult,
   onAuthStateChanged,
+  sendPasswordResetEmail,
   setPersistence,
+  signInWithEmailAndPassword,
   signInWithPopup,
   signInWithRedirect,
   signOut,
@@ -12,23 +15,23 @@ import {
   User,
 } from "firebase/auth";
 import {
-  addDoc,
-  collection,
-  deleteDoc,
-  doc,
-  onSnapshot,
-  orderBy,
-  query,
+  get,
+  onValue,
+  push,
+  ref as databaseRef,
+  remove,
   serverTimestamp,
-  setDoc,
-  writeBatch,
-  where,
-} from "firebase/firestore";
+  set,
+  update,
+} from "firebase/database";
 import {
   getDownloadURL,
   ref,
+  UploadTask,
   uploadBytesResumable,
+  uploadString,
 } from "firebase/storage";
+import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -41,6 +44,8 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
@@ -57,6 +62,7 @@ import { SavedPage } from "./pages/SavedPage";
 import { SellerProfilePage } from "./pages/SellerProfilePage";
 import { auth, db, firebaseConfigured, storage } from "./firebase";
 import {
+  deleteListing,
   normalizeListing,
   updateListing,
   setListingStatus,
@@ -65,21 +71,53 @@ import { Conversation, Listing, ListingSortOrder, Tab } from "./types";
 import { filterListings } from "./utils/filterListings";
 import { isLocalImage } from "./utils/validateImageUrl";
 
+function withTimeout<T>(promise: Promise<T>, milliseconds: number, message: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(message)), milliseconds);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
+function waitForUpload(uploadTask: UploadTask, milliseconds: number): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      uploadTask.cancel();
+      reject(new Error("Photo upload took too long. Check your connection and try again."));
+    }, milliseconds);
+    uploadTask.on(
+      "state_changed",
+      undefined,
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+      () => {
+        clearTimeout(timer);
+        resolve();
+      },
+    );
+  });
+}
+
 async function registerUser(user: User) {
   if (!db) return;
-  await setDoc(
-    doc(db, "users", user.uid),
-    {
-      uid: user.uid,
-      displayName:
-        user.displayName || user.email?.split("@")[0] || "Campus student",
-      email: user.email || "",
-      photoURL: user.photoURL || null,
-      campus: "University of Colombo",
-      updatedAt: serverTimestamp(),
-    },
-    { merge: true },
-  );
+  await update(databaseRef(db, `users/${user.uid}`), {
+    uid: user.uid,
+    displayName: user.displayName || user.email?.split("@")[0] || "Campus student",
+    email: user.email || "",
+    photoURL: user.photoURL || null,
+    campus: "University of Colombo",
+    updatedAt: serverTimestamp(),
+  });
 }
 
 async function uploadFirebaseImage(
@@ -91,23 +129,87 @@ async function uploadFirebaseImage(
   if (!isLocalImage(uri)) return uri;
   if (!storage) throw new Error("Firebase Storage is not configured.");
 
-  const response = await fetch(uri);
+  // Gallery photos can easily be 10-30 MB. Resize them before reading/uploading
+  // so posting stays quick and listing cards do not download full-size originals.
+  let uploadUri = uri;
+  let optimizedBase64: string | undefined;
+  if (Platform.OS !== "web") {
+    try {
+      const optimized = await withTimeout(
+        manipulateAsync(
+          uri,
+          [{ resize: { width: fixedFileName ? 512 : 1280 } }],
+          {
+            base64: true,
+            compress: fixedFileName ? 0.75 : 0.72,
+            format: SaveFormat.JPEG,
+          },
+        ),
+        15_000,
+        "Photo optimization took too long.",
+      );
+      uploadUri = optimized.uri;
+      optimizedBase64 = optimized.base64;
+    } catch {
+      // If optimization is unavailable, upload the picker-compressed original.
+    }
+  }
+
+  const fileName = fixedFileName || `${Date.now()}-${Math.random().toString(36).slice(2)}.jpg`;
+  const imageRef = ref(storage, `${path}/${fileName}`);
+
+  // React Native's Blob implementation can leave Firebase's resumable upload
+  // waiting forever. ImageManipulator has already produced a smaller JPEG, so
+  // upload its base64 bytes directly on native platforms instead.
+  if (Platform.OS !== "web" && optimizedBase64) {
+    const estimatedBytes = Math.ceil(optimizedBase64.length * 0.75);
+    if (estimatedBytes > maxSizeMb * 1024 * 1024) {
+      throw new Error(`Choose a photo smaller than ${maxSizeMb} MB.`);
+    }
+    try {
+      const result = await withTimeout(
+        uploadString(imageRef, optimizedBase64, "base64", { contentType: "image/jpeg" }),
+        45_000,
+        "Photo upload took too long. Check your connection and try again.",
+      );
+      return await withTimeout(
+        getDownloadURL(result.ref),
+        10_000,
+        "The photo uploaded, but its download URL could not be loaded.",
+      );
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      throw new Error(`Photo upload failed: ${detail}`);
+    }
+  }
+
+  const response = await withTimeout(
+    fetch(uploadUri),
+    15_000,
+    "Could not read the selected photo in time.",
+  );
   if (!response.ok) throw new Error("Could not read the selected photo.");
-  const photo = await response.blob();
+  const photo = await withTimeout(
+    response.blob(),
+    15_000,
+    "Could not prepare the selected photo in time.",
+  );
   if (photo.size > maxSizeMb * 1024 * 1024) {
     throw new Error(`Choose a photo smaller than ${maxSizeMb} MB.`);
   }
 
-  const contentType = photo.type || "image/jpeg";
+  const contentType = photo.type.startsWith("image/") ? photo.type : "image/jpeg";
   const extension = contentType.split("/")[1]?.replace("jpeg", "jpg") || "jpg";
-  const fileName = fixedFileName || `${Date.now()}-${Math.random().toString(36).slice(2)}.${extension}`;
-  const imageRef = ref(storage, `${path}/${fileName}`);
+  const blobFileName = fixedFileName || fileName.replace(/\.jpg$/, `.${extension}`);
+  const blobImageRef = fixedFileName ? imageRef : ref(storage, `${path}/${blobFileName}`);
   try {
-    const upload = uploadBytesResumable(imageRef, photo, { contentType });
-    await new Promise<void>((resolve, reject) => {
-      upload.on("state_changed", undefined, reject, resolve);
-    });
-    return await getDownloadURL(imageRef);
+    const uploadTask = uploadBytesResumable(blobImageRef, photo, { contentType });
+    await waitForUpload(uploadTask, 45_000);
+    return await withTimeout(
+      getDownloadURL(uploadTask.snapshot.ref),
+      10_000,
+      "The photo uploaded, but its download URL could not be loaded.",
+    );
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     throw new Error(
@@ -117,7 +219,52 @@ async function uploadFirebaseImage(
 }
 
 async function uploadListingImage(uri: string, userId: string): Promise<string> {
-  return uploadFirebaseImage(uri, `listing-images/${userId}`, 8);
+  if (!isLocalImage(uri)) return uri;
+
+  // Listing photos are kept as compact data URLs in Realtime Database. This
+  // keeps posting available for Firebase projects whose Storage bucket has not
+  // been provisioned yet, while still using the authenticated Firebase post.
+  if (Platform.OS !== "web") {
+    const optimized = await withTimeout(
+      manipulateAsync(
+        uri,
+        [{ resize: { width: 960 } }],
+        { base64: true, compress: 0.58, format: SaveFormat.JPEG },
+      ),
+      15_000,
+      "Photo optimization took too long.",
+    );
+    if (!optimized.base64) throw new Error("Could not prepare the selected photo.");
+    return `data:image/jpeg;base64,${optimized.base64}`;
+  }
+
+  const response = await withTimeout(fetch(uri), 15_000, "Could not read the selected photo.");
+  if (!response.ok) throw new Error("Could not read the selected photo.");
+  const source = await withTimeout(response.blob(), 15_000, "Could not prepare the selected photo.");
+  const bitmap = await withTimeout(createImageBitmap(source), 15_000, "Could not decode the selected photo.");
+  const scale = Math.min(1, 960 / bitmap.width);
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+  canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("Could not prepare the selected photo.");
+  context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close();
+  const dataUrl = canvas.toDataURL("image/jpeg", 0.58);
+  if (dataUrl.length > 700_000) {
+    throw new Error("This photo is still too large after optimization. Choose a smaller photo.");
+  }
+  return dataUrl;
+}
+
+async function uploadListingImages(images: string[], userId: string): Promise<string[]> {
+  const uploaded: string[] = [];
+  // Upload one at a time. Concurrent native Blob uploads are memory-heavy and
+  // unreliable on lower-memory Android devices.
+  for (const image of images.slice(0, 3)) {
+    uploaded.push(isLocalImage(image) ? await uploadListingImage(image, userId) : image);
+  }
+  return uploaded;
 }
 
 async function confirmStatusChange(nextStatus: Listing["status"], listingType: Listing["listingType"]): Promise<boolean> {
@@ -147,6 +294,8 @@ export default function App() {
   const [sortOrder, setSortOrder] = useState<ListingSortOrder>("newest");
   const [savedIds, setSavedIds] = useState<string[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [conversationToOpen, setConversationToOpen] = useState<string | null>(null);
+  const [messageFeedback, setMessageFeedback] = useState("");
   const [selected, setSelected] = useState<Listing | null>(null);
   const [selectedSeller, setSelectedSeller] = useState<Listing | null>(null);
   const [user, setUser] = useState<User | null>(auth?.currentUser || null);
@@ -176,6 +325,9 @@ export default function App() {
       setTab(previousTab);
       return history.slice(0, -1);
     });
+  }, []);
+  const consumeConversationToOpen = useCallback(() => {
+    setConversationToOpen(null);
   }, []);
 
   useEffect(() => {
@@ -224,8 +376,8 @@ export default function App() {
       setProfilePhone("");
       return;
     }
-    return onSnapshot(doc(db, "users", user.uid), (snapshot) => {
-      const data = snapshot.data();
+    return onValue(databaseRef(db, `users/${user.uid}`), (snapshot) => {
+      const data = snapshot.val();
       setProfilePhone(typeof data?.phoneNumber === "string" ? data.phoneNumber : "");
       if (typeof data?.photoURL === "string") setProfilePhotoURL(data.photoURL);
     });
@@ -236,8 +388,8 @@ export default function App() {
       setSavedIds([]);
       return;
     }
-    return onSnapshot(collection(db, "users", user.uid, "saved"), (snapshot) =>
-      setSavedIds(snapshot.docs.map((entry) => entry.id)),
+    return onValue(databaseRef(db, `users/${user.uid}/saved`), (snapshot) =>
+      setSavedIds(Object.keys(snapshot.val() || {})),
     );
   }, [user]);
 
@@ -246,40 +398,51 @@ export default function App() {
       setConversations([]);
       return;
     }
-    const inbox = query(
-      collection(db, "conversations"),
-      where("memberIds", "array-contains", user.uid),
-    );
-    return onSnapshot(inbox, (snapshot) =>
-      setConversations(
-        snapshot.docs.map((entry) => ({
-          id: entry.id,
-          ...entry.data(),
-        })) as Conversation[],
-      ),
-    );
+    let conversationListeners: Array<() => void> = [];
+    const stopIndex = onValue(databaseRef(db, `userConversations/${user.uid}`), (snapshot) => {
+      conversationListeners.forEach((unsubscribe) => unsubscribe());
+      conversationListeners = [];
+      const conversationIds = Object.keys(snapshot.val() || {});
+      if (!conversationIds.length) {
+        setConversations([]);
+        return;
+      }
+      const liveConversations = new Map<string, Conversation>();
+      conversationIds.forEach((id) => {
+        const unsubscribe = onValue(databaseRef(db!, `conversations/${id}`), (conversationSnapshot) => {
+          const conversation = conversationSnapshot.val() as (Omit<Conversation, "id"> & { messages?: unknown }) | null;
+          if (conversation) {
+            const { messages: _messages, ...summary } = conversation;
+            liveConversations.set(id, { id, ...summary } as Conversation);
+          } else liveConversations.delete(id);
+          setConversations(Array.from(liveConversations.values()));
+        });
+        conversationListeners.push(unsubscribe);
+      });
+    });
+    return () => {
+      stopIndex();
+      conversationListeners.forEach((unsubscribe) => unsubscribe());
+    };
   }, [user]);
 
   useEffect(() => {
-    if (!db || !user) {
+    if (!db) {
       setItems([]);
       return;
     }
-    const listingsQuery = query(
-      collection(db, "listings"),
-      orderBy("createdAt", "desc"),
-    );
-    return onSnapshot(
-      listingsQuery,
+    return onValue(
+      databaseRef(db, "listings"),
       (snapshot) => {
-        const liveListings = snapshot.docs.map((entry) =>
-          normalizeListing({ id: entry.id, ...entry.data() }),
+        const data = snapshot.val() as Record<string, Record<string, unknown>> | null;
+        const liveListings = Object.entries(data || {}).map(([id, listing]) =>
+          normalizeListing({ id, ...listing }),
         );
         setItems(liveListings);
       },
       () => setItems([]),
     );
-  }, [user]);
+  }, []);
 
   const filterResult = useMemo(
     () =>
@@ -312,10 +475,10 @@ export default function App() {
       setAuthOpen(true);
       return;
     }
-    const savedRef = doc(db, "users", user.uid, "saved", id);
-    if (savedIds.includes(id)) await deleteDoc(savedRef);
+    const savedRef = databaseRef(db, `users/${user.uid}/saved/${id}`);
+    if (savedIds.includes(id)) await remove(savedRef);
     else
-      await setDoc(savedRef, {
+      await set(savedRef, {
         listingId: id,
         userId: user.uid,
         createdAt: serverTimestamp(),
@@ -347,6 +510,38 @@ export default function App() {
       Alert.alert("Google sign-in failed", code);
     }
   };
+  const authenticateWithEmail = async (
+    mode: "signin" | "signup",
+    email: string,
+    password: string,
+    displayName: string,
+  ) => {
+    if (!auth) throw new Error("Firebase Authentication is not configured.");
+    const cleanEmail = email.trim().toLowerCase();
+    if (!/^\S+@\S+\.\S+$/.test(cleanEmail)) throw new Error("Enter a valid email address.");
+    if (password.length < 6) throw new Error("Password must contain at least 6 characters.");
+    try {
+      const credential = mode === "signup"
+        ? await createUserWithEmailAndPassword(auth, cleanEmail, password)
+        : await signInWithEmailAndPassword(auth, cleanEmail, password);
+      if (mode === "signup") {
+        const cleanName = displayName.trim();
+        if (cleanName) await updateProfile(credential.user, { displayName: cleanName });
+      }
+      await registerUser(credential.user);
+      setUser(credential.user);
+      setProfileReady(true);
+      setAuthOpen(false);
+      setAuthError("");
+    } catch (error) {
+      const code = typeof error === "object" && error && "code" in error ? String(error.code) : "";
+      if (code === "auth/email-already-in-use") throw new Error("An account already exists for this email. Sign in instead.");
+      if (code === "auth/invalid-credential" || code === "auth/wrong-password" || code === "auth/user-not-found") throw new Error("Email or password is incorrect.");
+      if (code === "auth/operation-not-allowed") throw new Error("Email login is not enabled in Firebase yet.");
+      if (code === "auth/too-many-requests") throw new Error("Too many attempts. Please wait and try again.");
+      throw error;
+    }
+  };
   const publish = async (draft: SellFormValues) => {
     if (!user) {
       setSellOpen(false);
@@ -360,11 +555,9 @@ export default function App() {
       );
       return;
     }
-    const image = draft.image.trim();
-    const savedImage = image && isLocalImage(image)
-      ? await uploadListingImage(image, user.uid)
-      : image;
-    await addDoc(collection(db, "listings"), {
+    const savedImages = await uploadListingImages(draft.images, user.uid);
+    const listingRef = push(databaseRef(db, "listings"));
+    await set(listingRef, {
       title: draft.title.trim(),
       price: Number(draft.price),
       category: draft.category,
@@ -374,7 +567,8 @@ export default function App() {
       sellerPhotoURL: profilePhotoURL || "",
       campus: draft.campus,
       condition: draft.condition,
-      image: savedImage,
+      image: savedImages[0] || "",
+      images: savedImages,
       description: draft.description.trim(),
       negotiable: draft.negotiable,
       urgent: draft.urgent,
@@ -385,31 +579,28 @@ export default function App() {
     setSellOpen(false);
   };
   const contactSeller = async (listing: Listing | null) => {
+    setMessageFeedback("");
     if (!user) {
       setAuthOpen(true);
       return;
     }
     if (!listing?.sellerId) {
-      Alert.alert(
-        "Demo listing",
-        "This sample seller is not connected to an account. Choose a listing published by a signed-in student to start a real conversation.",
-      );
+      setMessageFeedback("This listing isn't linked to a seller account, so a chat can't be started. Choose a listing posted by a signed-in student.");
       return;
     }
     if (listing.sellerId === user.uid) {
-      Alert.alert("Your listing", "Buyers will be able to message you about this item.");
+      setMessageFeedback("This is your listing. Other students can message you about it.");
       return;
     }
     if (!db) {
-      Alert.alert("Messaging unavailable", "Firebase is not configured for this app.");
+      setMessageFeedback("Messaging is unavailable because Firebase isn't configured.");
       return;
     }
     const memberIds = [user.uid, listing.sellerId].sort();
     const conversationId = `${listing.id}_${memberIds.join("_")}`;
     try {
-      await setDoc(
-        doc(db, "conversations", conversationId),
-        {
+      const conversationRef = databaseRef(db, `conversations/${conversationId}`);
+      await update(conversationRef, {
           listingId: listing.id,
           listingTitle: listing.title,
           memberIds,
@@ -421,15 +612,18 @@ export default function App() {
           ...(profilePhotoURL ? { buyerPhotoURL: profilePhotoURL } : {}),
           ...(listing.image ? { listingImage: listing.image } : {}),
           updatedAt: serverTimestamp(),
-        },
-        { merge: true },
-      );
+      });
+      await update(databaseRef(db), {
+        [`userConversations/${user.uid}/${conversationId}`]: true,
+        [`userConversations/${listing.sellerId}/${conversationId}`]: true,
+      });
+      setMessageFeedback("");
+      setConversationToOpen(conversationId);
       setSelected(null);
       navigateTo("Messages");
     } catch (error) {
-      Alert.alert(
-        "Could not start conversation",
-        error instanceof Error ? error.message : "Please try again.",
+      setMessageFeedback(
+        `Couldn't start the conversation: ${error instanceof Error ? error.message : "Please try again."}`,
       );
     }
   };
@@ -445,14 +639,27 @@ export default function App() {
       current?.id === id ? { ...current, status } : current,
     );
   };
+  const removeOwnListing = async (id: string) => {
+    const confirmed = Platform.OS === "web"
+      ? window.confirm("Delete this listing permanently?")
+      : await new Promise<boolean>((resolve) => Alert.alert(
+          "Delete listing",
+          "This listing will be permanently removed.",
+          [
+            { text: "Cancel", style: "cancel", onPress: () => resolve(false) },
+            { text: "Delete", style: "destructive", onPress: () => resolve(true) },
+          ],
+        ));
+    if (!confirmed) return;
+    await deleteListing(id);
+    setItems((current) => current.filter((listing) => listing.id !== id));
+    setSelected(null);
+  };
   const saveListingEdits = async (values: SellFormValues) => {
     if (!selected || !user || selected.sellerId !== user.uid) {
       throw new Error("You can't edit this listing.");
     }
-    const selectedImage = values.image.trim();
-    const image = selectedImage && isLocalImage(selectedImage)
-      ? await uploadListingImage(selectedImage, user.uid)
-      : selectedImage;
+    const images = await uploadListingImages(values.images, user.uid);
     await updateListing(selected.id, {
       title: values.title.trim(),
       price: Number(values.price),
@@ -463,7 +670,8 @@ export default function App() {
       negotiable: values.negotiable,
       urgent: values.urgent,
       listingType: values.listingType,
-      image,
+      image: images[0] || "",
+      images,
     });
     const updatedFields = {
       title: values.title.trim(),
@@ -472,7 +680,8 @@ export default function App() {
       condition: values.condition,
       campus: values.campus,
       description: values.description.trim(),
-      image,
+      image: images[0] || "",
+      images,
       negotiable: values.negotiable,
       urgent: values.urgent,
       listingType: values.listingType,
@@ -507,13 +716,17 @@ export default function App() {
   };
   const saveProfilePhone = async (phoneNumber: string) => {
     if (!user || !db) throw new Error("Sign in before saving a phone number.");
-    const firestore = db;
     const cleaned = phoneNumber.replace(/[^0-9+]/g, "");
     if (cleaned && !/^(?:\+94|0)[0-9]{9}$/.test(cleaned)) throw new Error("Enter a valid Sri Lankan number, for example 0771234567.");
-    await setDoc(doc(firestore, "users", user.uid), { phoneNumber: cleaned, updatedAt: serverTimestamp() }, { merge: true });
-    const batch = writeBatch(firestore);
-    myListings.forEach((listing) => batch.update(doc(firestore, "listings", listing.id), { sellerPhone: cleaned, updatedAt: serverTimestamp() }));
-    await batch.commit();
+    const changes: Record<string, unknown> = {
+      [`users/${user.uid}/phoneNumber`]: cleaned,
+      [`users/${user.uid}/updatedAt`]: serverTimestamp(),
+    };
+    myListings.forEach((listing) => {
+      changes[`listings/${listing.id}/sellerPhone`] = cleaned;
+      changes[`listings/${listing.id}/updatedAt`] = serverTimestamp();
+    });
+    await update(databaseRef(db), changes);
     setProfilePhone(cleaned);
   };
 
@@ -560,6 +773,8 @@ export default function App() {
         <MessagesPage
           conversations={conversations}
           userId={user?.uid || null}
+          conversationToOpen={conversationToOpen}
+          onConversationOpened={consumeConversationToOpen}
           onBrowse={() => navigateTo("Explore")}
           onBack={goBack}
         />
@@ -602,6 +817,7 @@ export default function App() {
           }}
           onSave={toggleSaved}
           onOpen={setSelected}
+          messageFeedback={messageFeedback}
           onMessage={() => contactSeller(selectedSeller)}
         />
       )}
@@ -614,15 +830,53 @@ export default function App() {
       <ListingModal
         item={selected}
         user={user}
+        messageFeedback={messageFeedback}
         onClose={() => setSelected(null)}
         onContact={() => contactSeller(selected)}
         onCall={async () => {
-          if (!selected?.sellerPhone) return Alert.alert("Phone number unavailable", "This user has not added a phone number to their profile.");
-          const url = `tel:${selected.sellerPhone}`;
-          if (await Linking.canOpenURL(url)) await Linking.openURL(url);
-          else Alert.alert("Calling unavailable", "This device cannot open the phone app.");
+          if (!selected) return;
+          let phoneNumber = selected.sellerPhone?.trim() || "";
+
+          // On web, launch while the click still has an active user gesture.
+          // Waiting for Firebase first can cause browsers to block tel: links.
+          if (Platform.OS === "web" && phoneNumber) {
+            const callableNumber = phoneNumber.replace(/[^0-9+]/g, "");
+            if (callableNumber) {
+              window.location.assign(`tel:${callableNumber}`);
+              return;
+            }
+          }
+
+          if (db && selected.sellerId) {
+            try {
+              const profile = await get(databaseRef(db, `users/${selected.sellerId}/phoneNumber`));
+              if (typeof profile.val() === "string" && profile.val().trim()) {
+                phoneNumber = profile.val().trim();
+              }
+            } catch {
+              // The listing's saved number remains a safe fallback.
+            }
+          }
+          const callableNumber = phoneNumber.replace(/[^0-9+]/g, "");
+          if (!callableNumber) {
+            Alert.alert("Phone number unavailable", "This user has not added a phone number to their profile.");
+            return;
+          }
+          const url = `tel:${callableNumber}`;
+          if (Platform.OS === "web") {
+            window.location.assign(url);
+            return;
+          }
+          try {
+            // Do not gate this with canOpenURL: Android package visibility may
+            // report false even though the system dialer handles tel: links.
+            await Linking.openURL(url);
+          } catch {
+            Alert.alert("Calling unavailable", "This device cannot open the phone app.");
+          }
         }}
         onStatusChange={changeListingStatus}
+        onDelete={removeOwnListing}
         onEdit={() => setEditOpen(true)}
         onViewSeller={(item) => {
           setSelectedSeller(item);
@@ -645,6 +899,13 @@ export default function App() {
         onClose={() => setAuthOpen(false)}
         onSignIn={signInWithGoogle}
         onNativeSuccess={completeNativeGoogleSignIn}
+        onEmailAuth={authenticateWithEmail}
+        onResetPassword={async (email) => {
+          if (!auth) throw new Error("Firebase Authentication is not configured.");
+          const cleanEmail = email.trim().toLowerCase();
+          if (!/^\S+@\S+\.\S+$/.test(cleanEmail)) throw new Error("Enter your email address first.");
+          await sendPasswordResetEmail(auth, cleanEmail);
+        }}
         onError={setAuthError}
         error={authError}
       />
@@ -759,25 +1020,32 @@ function NavItem({
 function ListingModal({
   item,
   user,
+  messageFeedback,
   onClose,
   onContact,
   onCall,
   onStatusChange,
+  onDelete,
   onEdit,
   onViewSeller,
 }: {
   item: Listing | null;
   user: User | null;
+  messageFeedback: string;
   onClose: () => void;
   onContact: () => void;
   onCall: () => void;
   onStatusChange: (id: string, status: Listing["status"]) => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
   onEdit: () => void;
   onViewSeller: (item: Listing) => void;
 }) {
   const [savingStatus, setSavingStatus] = useState(false);
   const [statusError, setStatusError] = useState("");
+  const { width } = useWindowDimensions();
   const isOwner = Boolean(item && user?.uid === item.sellerId);
+  const itemImages = item?.images?.length ? item.images : item?.image ? [item.image] : [];
+  const imageWidth = Math.min(width, 680);
 
   useEffect(() => {
     setSavingStatus(false);
@@ -812,7 +1080,13 @@ function ListingModal({
       {item && (
         <View style={styles.backdrop}>
           <View style={styles.detail}>
-            {item.image ? <Image source={{ uri: item.image }} style={[styles.detailImage, item.status === "sold" && styles.soldDetailImage]} /> : <View style={[styles.detailImage, styles.noDetailImage]}><Text style={styles.noDetailImageIcon}>◎</Text><Text style={styles.noDetailImageText}>No photo available</Text></View>}
+            {itemImages.length ? (
+              <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false} style={styles.detailGallery}>
+                {itemImages.map((image, index) => (
+                  <Image key={`${image.slice(0, 48)}-${index}`} resizeMode="contain" source={{ uri: image }} style={[styles.detailImage, { width: imageWidth }, item.status === "sold" && styles.soldDetailImage]} />
+                ))}
+              </ScrollView>
+            ) : <View style={[styles.detailImage, { width: imageWidth }, styles.noDetailImage]}><Text style={styles.noDetailImageIcon}>◎</Text><Text style={styles.noDetailImageText}>No photo available</Text></View>}
             {item.status === "sold" ? <SoldBadge /> : null}
             <Pressable style={styles.close} onPress={onClose}>
               <Text style={styles.closeText}>×</Text>
@@ -841,6 +1115,7 @@ function ListingModal({
               </View>
               <Text style={styles.descriptionHeading}>Description</Text>
               <Text style={styles.description}>{item.description}</Text>
+              {messageFeedback ? <Text accessibilityRole="alert" style={styles.messageFeedback}>{messageFeedback}</Text> : null}
               {isOwner ? (
                 <View>
                   <Pressable style={styles.outline} onPress={onEdit}>
@@ -861,12 +1136,26 @@ function ListingModal({
                       </Text>
                     )}
                   </Pressable>
+                  <Pressable
+                    disabled={savingStatus}
+                    style={[styles.deleteListingButton, savingStatus && styles.disabled]}
+                    onPress={async () => {
+                      if (!item || savingStatus) return;
+                      setSavingStatus(true);
+                      setStatusError("");
+                      try { await onDelete(item.id); }
+                      catch (error) { setStatusError(error instanceof Error ? error.message : "Could not delete listing."); }
+                      finally { setSavingStatus(false); }
+                    }}
+                  >
+                    <Text style={styles.deleteListingText}>Delete listing</Text>
+                  </Pressable>
                 </View>
               ) : item.status === "sold" ? (
                 <Text style={styles.soldMessage}>{item.listingType === "wanted" ? "This request has been fulfilled" : "This item has been sold"}</Text>
               ) : (
                 <View style={styles.contactActions}>
-                  <Pressable style={[styles.contactButton, !item.sellerPhone && styles.contactButtonDisabled]} onPress={onCall}><Text style={styles.contactButtonText}>☎  Call</Text></Pressable>
+                  <Pressable style={styles.contactButton} onPress={onCall}><Text style={styles.contactButtonText}>☎  Call</Text></Pressable>
                   <Pressable style={styles.contactButton} onPress={onContact}><Text style={styles.contactButtonText}>{user ? "●  Message" : "Sign in"}</Text></Pressable>
                 </View>
               )}
@@ -885,6 +1174,8 @@ function AuthModal({
   onClose,
   onSignIn,
   onNativeSuccess,
+  onEmailAuth,
+  onResetPassword,
   onError,
   error,
 }: {
@@ -892,19 +1183,44 @@ function AuthModal({
   onClose: () => void;
   onSignIn: () => Promise<void>;
   onNativeSuccess: (user: User) => Promise<void>;
+  onEmailAuth: (mode: "signin" | "signup", email: string, password: string, displayName: string) => Promise<void>;
+  onResetPassword: (email: string) => Promise<void>;
   onError: (message: string) => void;
   error: string;
 }) {
+  const [mode, setMode] = useState<"signin" | "signup">("signin");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  const submitEmail = async () => {
+    setBusy(true); setMessage(""); onError("");
+    try { await onEmailAuth(mode, email, password, displayName); }
+    catch (failure) { onError(failure instanceof Error ? failure.message : "Authentication failed."); }
+    finally { setBusy(false); }
+  };
   return (
     <Modal visible={visible} transparent animationType="fade">
       <View style={styles.backdrop}>
-        <View style={styles.auth}>
+        <ScrollView contentContainerStyle={styles.authContent} keyboardShouldPersistTaps="handled" style={styles.auth}>
           <Text style={styles.formTitle}>Welcome to campus marketplace</Text>
           <Text style={styles.authMessage}>
             Sign in to save listings, message sellers, and publish your own
             items.
           </Text>
+          <View style={styles.authTabs}>
+            <Pressable onPress={() => { setMode("signin"); onError(""); }} style={[styles.authTab, mode === "signin" && styles.authTabActive]}><Text style={[styles.authTabText, mode === "signin" && styles.authTabTextActive]}>Sign in</Text></Pressable>
+            <Pressable onPress={() => { setMode("signup"); onError(""); }} style={[styles.authTab, mode === "signup" && styles.authTabActive]}><Text style={[styles.authTabText, mode === "signup" && styles.authTabTextActive]}>Create account</Text></Pressable>
+          </View>
+          {mode === "signup" ? <TextInput autoCapitalize="words" onChangeText={setDisplayName} placeholder="Your name" placeholderTextColor="#87918C" style={styles.authInput} value={displayName} /> : null}
+          <TextInput autoCapitalize="none" autoComplete="email" keyboardType="email-address" onChangeText={setEmail} placeholder="Email address" placeholderTextColor="#87918C" style={styles.authInput} value={email} />
+          <TextInput autoCapitalize="none" autoComplete={mode === "signup" ? "new-password" : "current-password"} onChangeText={setPassword} onSubmitEditing={submitEmail} placeholder="Password" placeholderTextColor="#87918C" secureTextEntry style={styles.authInput} value={password} />
           {error ? <Text style={styles.authError}>{error}</Text> : null}
+          {message ? <Text style={styles.authSuccess}>{message}</Text> : null}
+          <Pressable disabled={busy} onPress={submitEmail} style={[styles.primary, busy && styles.disabled]}><Text style={styles.primaryText}>{busy ? "Please wait…" : mode === "signin" ? "Sign in with email" : "Create account"}</Text></Pressable>
+          {mode === "signin" ? <Pressable disabled={busy} onPress={async () => { setBusy(true); onError(""); setMessage(""); try { await onResetPassword(email); setMessage("Password reset email sent."); } catch (resetError) { onError(resetError instanceof Error ? resetError.message : "Could not send reset email."); } finally { setBusy(false); } }}><Text style={styles.forgotPassword}>Forgot password?</Text></Pressable> : null}
+          <View style={styles.authDivider}><View style={styles.authDividerLine} /><Text style={styles.authDividerText}>OR</Text><View style={styles.authDividerLine} /></View>
           {Platform.OS === "web" ? (
             <Pressable style={styles.googleButton} onPress={onSignIn}>
               <Text style={styles.googleMark}>G</Text>
@@ -919,7 +1235,7 @@ function AuthModal({
           <Pressable style={styles.outline} onPress={onClose}>
             <Text style={styles.outlineText}>Maybe later</Text>
           </Pressable>
-        </View>
+        </ScrollView>
       </View>
     </Modal>
   );
@@ -977,7 +1293,8 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     maxHeight: "94%",
   },
-  detailImage: { width: "100%", height: 230 },
+  detailGallery: { backgroundColor: "#E5ECE5", flexGrow: 0 },
+  detailImage: { backgroundColor: "#E5ECE5", height: 280 },
   soldDetailImage: { opacity: 0.62 },
   noDetailImage: { alignItems: "center", backgroundColor: "#E5ECE5", justifyContent: "center" },
   noDetailImageIcon: { color: "#8EA097", fontSize: 40 },
@@ -1055,6 +1372,15 @@ const styles = StyleSheet.create({
     lineHeight: 17,
     marginTop: 12,
   },
+  messageFeedback: {
+    backgroundColor: "#FBECEE",
+    borderRadius: 10,
+    color: "#B64950",
+    fontSize: 13,
+    lineHeight: 19,
+    marginBottom: 14,
+    padding: 12,
+  },
   primary: {
     height: 50,
     backgroundColor: "#1F5D4C",
@@ -1064,7 +1390,8 @@ const styles = StyleSheet.create({
     marginTop: 24,
   },
   primaryText: { color: "#FFF", fontWeight: "800" },
-  auth: { backgroundColor: "#FFF", borderRadius: 20, padding: 24, margin: 20 },
+  auth: { backgroundColor: "#FFF", borderRadius: 20, margin: 20, maxHeight: "92%" },
+  authContent: { padding: 24 },
   postChoice: { backgroundColor: "#FFF", borderRadius: 20, margin: 20, padding: 24 },
   choiceHint: { color: "#87918C", lineHeight: 20, marginBottom: 8, marginTop: 8 },
   choiceCard: { alignItems: "center", backgroundColor: "#EDF5EF", borderColor: "#BCD0C3", borderRadius: 14, borderWidth: 1, flexDirection: "row", gap: 14, marginTop: 14, minHeight: 72, padding: 14 },
@@ -1074,6 +1401,17 @@ const styles = StyleSheet.create({
   choiceText: { color: "#87918C", fontSize: 12, marginTop: 3 },
   formTitle: { color: "#173C34", fontSize: 22, fontWeight: "800" },
   authMessage: { color: "#87918C", lineHeight: 20, marginTop: 10 },
+  authTabs: { backgroundColor: "#EEF3EF", borderRadius: 12, flexDirection: "row", marginTop: 18, padding: 4 },
+  authTab: { alignItems: "center", borderRadius: 9, flex: 1, paddingVertical: 10 },
+  authTabActive: { backgroundColor: "#FFF" },
+  authTabText: { color: "#718078", fontSize: 12, fontWeight: "700" },
+  authTabTextActive: { color: "#1F5D4C" },
+  authInput: { borderColor: "#D7DDD8", borderRadius: 12, borderWidth: 1, color: "#173C34", marginTop: 12, minHeight: 48, paddingHorizontal: 14 },
+  authSuccess: { color: "#1F6D54", fontSize: 12, marginTop: 12, textAlign: "center" },
+  forgotPassword: { color: "#1F5D4C", fontSize: 12, fontWeight: "700", marginTop: 12, textAlign: "center" },
+  authDivider: { alignItems: "center", flexDirection: "row", gap: 10, marginTop: 18 },
+  authDividerLine: { backgroundColor: "#E1E6E2", flex: 1, height: 1 },
+  authDividerText: { color: "#87918C", fontSize: 10, fontWeight: "800" },
   authError: {
     color: "#B64950",
     backgroundColor: "#FBECEE",
@@ -1105,4 +1443,6 @@ const styles = StyleSheet.create({
   },
   disabled: { opacity: 0.45 },
   outlineText: { color: "#1F5D4C", fontWeight: "800" },
+  deleteListingButton: { alignItems: "center", borderColor: "#DFA9AD", borderRadius: 14, borderWidth: 1, height: 50, justifyContent: "center", marginTop: 12 },
+  deleteListingText: { color: "#B33D46", fontWeight: "800" },
 });

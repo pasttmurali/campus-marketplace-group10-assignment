@@ -2,10 +2,11 @@ import { FlatList, Pressable, ScrollView, StyleSheet, Text, View } from "react-n
 import { ListingCard } from "../components/ListingCard";
 import { Listing } from "../types";
 
-export function SellerProfilePage({ seller, items, savedIds, onBack, onSave, onOpen, onMessage }: {
+export function SellerProfilePage({ seller, items, savedIds, messageFeedback, onBack, onSave, onOpen, onMessage }: {
   seller: Listing;
   items: Listing[];
   savedIds: string[];
+  messageFeedback: string;
   onBack: () => void;
   onSave: (id: string) => void;
   onOpen: (item: Listing) => void;
@@ -30,6 +31,7 @@ export function SellerProfilePage({ seller, items, savedIds, onBack, onSave, onO
         <Pressable accessibilityRole="button" style={styles.messageButton} onPress={onMessage}>
           <Text style={styles.messageText}>Message {seller.seller}</Text>
         </Pressable>
+        {messageFeedback ? <Text accessibilityRole="alert" style={styles.messageFeedback}>{messageFeedback}</Text> : null}
       </View>
       <Text style={styles.heading}>Listings from {seller.seller}</Text>
       <FlatList
@@ -63,6 +65,7 @@ const styles = StyleSheet.create({
   divider: { backgroundColor: "#E9ECE6", width: 1 },
   messageButton: { alignItems: "center", backgroundColor: "#1F5D4C", borderRadius: 14, height: 48, justifyContent: "center", marginTop: 22, width: "100%" },
   messageText: { color: "#FFF", fontWeight: "800" },
+  messageFeedback: { backgroundColor: "#FBECEE", borderRadius: 10, color: "#B64950", fontSize: 13, lineHeight: 19, marginTop: 14, padding: 12, textAlign: "center" },
   heading: { color: "#173C34", fontSize: 20, fontWeight: "800", marginBottom: 16, marginTop: 28 },
   grid: { gap: 14 },
   columns: { gap: 14 },

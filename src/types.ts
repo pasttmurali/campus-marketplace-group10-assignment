@@ -1,4 +1,4 @@
-import { Timestamp } from "firebase/firestore";
+export type StoredTimestamp = number | { toMillis: () => number; toDate?: () => Date };
 
 export type Listing = {
   id: string;
@@ -12,14 +12,15 @@ export type Listing = {
   campus: string;
   condition: string;
   image: string;
+  images?: string[];
   description?: string;
   negotiable?: boolean;
   urgent?: boolean;
   listingType?: "selling" | "wanted";
   status: "available" | "sold";
-  soldAt?: Timestamp | null;
-  updatedAt?: Timestamp;
-  createdAt?: Timestamp | Date | string | number | null;
+  soldAt?: StoredTimestamp | null;
+  updatedAt?: StoredTimestamp;
+  createdAt?: Date | string | StoredTimestamp | null;
 };
 
 export type ListingSortOrder = "newest" | "price-asc" | "price-desc";
@@ -39,16 +40,16 @@ export type Conversation = {
   lastMessage?: string;
   lastSenderId?: string;
   lastMessageId?: string;
-  updatedAt?: Timestamp | null;
+  updatedAt?: StoredTimestamp | null;
 };
 
 export type Message = {
   id: string;
   senderId: string;
   text: string;
-  createdAt?: Timestamp | null;
-  editedAt?: Timestamp | null;
-  deletedAt?: Timestamp | null;
+  createdAt?: StoredTimestamp | null;
+  editedAt?: StoredTimestamp | null;
+  deletedAt?: StoredTimestamp | null;
 };
 
 export type Tab =

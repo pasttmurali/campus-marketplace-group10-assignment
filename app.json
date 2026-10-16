@@ -9,7 +9,8 @@
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.nsayoo.campus-marketplace"
+      "bundleIdentifier": "com.nsayoo.campus-marketplace",
+      "googleServicesFile": "./GoogleService-Info.plist"
     },
     "android": {
       "package": "com.nsayoo.campusmarketplace",

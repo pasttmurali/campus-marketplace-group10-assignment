@@ -15,6 +15,12 @@ service cloud.firestore {
       return value is string && value.size() <= 2048
         && (value.matches('^https://.*') || value.matches('^http://.*'));
     }
+    function validListingImage(value) {
+      return value is string && (
+        value == '' || validUrl(value)
+        || (value.size() <= 700000 && value.matches('^data:image/[a-zA-Z0-9.+-]+;base64,.*'))
+      );
+    }
     function validUser(data) {
       return data.keys().hasOnly(['uid','displayName','email','photoURL','campus','phoneNumber','updatedAt'])
         && data.keys().hasAll(['uid','displayName','email','photoURL','campus','updatedAt'])
@@ -39,7 +45,7 @@ service cloud.firestore {
         && (!('sellerPhotoURL' in data) || data.sellerPhotoURL == '' || validUrl(data.sellerPhotoURL))
         && data.campus is string && data.campus.size() >= 1 && data.campus.size() <= 100
         && data.condition is string && data.condition.size() >= 1 && data.condition.size() <= 80
-        && data.image is string && (data.image == '' || validUrl(data.image))
+        && validListingImage(data.image)
         && data.description is string && data.description.size() <= 2000
         && (!('negotiable' in data) || data.negotiable is bool)
         && (!('urgent' in data) || data.urgent is bool)
@@ -66,7 +72,7 @@ service cloud.firestore {
         && (!('buyerName' in data) || (data.buyerName is string && data.buyerName.size() >= 1 && data.buyerName.size() <= 80))
         && (!('sellerPhotoURL' in data) || validUrl(data.sellerPhotoURL))
         && (!('buyerPhotoURL' in data) || validUrl(data.buyerPhotoURL))
-        && (!('listingImage' in data) || validUrl(data.listingImage))
+        && (!('listingImage' in data) || validListingImage(data.listingImage))
         && (!('lastMessage' in data) || (data.lastMessage is string && data.lastMessage.size() >= 1 && data.lastMessage.size() <= 2000))
         && (!('lastSenderId' in data) || (data.lastSenderId is string && data.lastSenderId in data.memberIds))
         && (!('lastMessageId' in data) || (data.lastMessageId is string && data.lastMessageId.size() >= 1 && data.lastMessageId.size() <= 128))

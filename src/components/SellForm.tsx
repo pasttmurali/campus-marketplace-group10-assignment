@@ -24,7 +24,7 @@ export type SellFormValues = {
   condition: string;
   campus: string;
   description: string;
-  image: string;
+  images: string[];
   negotiable: boolean;
   urgent: boolean;
   listingType: "selling" | "wanted";
@@ -39,7 +39,7 @@ const emptyValues: SellFormValues = {
   condition: "",
   campus: "",
   description: "",
-  image: "",
+  images: [],
   negotiable: false,
   urgent: false,
   listingType: "selling",
@@ -60,9 +60,8 @@ export function validateSellForm(values: SellFormValues): SellFormErrors {
   if (values.description.trim().length < 10) {
     errors.description = "Description must be at least 10 characters.";
   }
-  if (!isValidImageReference(values.image)) {
-    errors.image = "Enter a valid HTTP(S) image URL or choose a photo from your device.";
-  }
+  if (values.images.length > 3) errors.images = "Choose no more than 3 photos.";
+  else if (values.images.some((image) => !isValidImageReference(image))) errors.images = "One of the selected photos is invalid.";
   return errors;
 }
 
@@ -180,10 +179,10 @@ export function SellForm({
             ) : null}
 
             <ListingImagePicker
-              value={values.image}
-              error={errors.image}
+              value={values.images}
+              error={errors.images}
               disabled={busy}
-              onChange={(value) => update("image", value)}
+              onChange={(value) => update("images", value)}
             />
 
             {submitError ? <Text style={styles.submitError}>{submitError}</Text> : null}

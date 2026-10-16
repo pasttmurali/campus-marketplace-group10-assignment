@@ -51,10 +51,6 @@ export function ProfilePage({
   const [phoneBusy, setPhoneBusy] = useState(false);
   const [phoneMessage, setPhoneMessage] = useState("");
   useEffect(() => setPhone(phoneNumber), [phoneNumber]);
-  const name =
-    user?.displayName || user?.email?.split("@")[0] || "Campus guest";
-  const initials = (user?.email || name).trim().charAt(0).toUpperCase();
-
   const pickProfilePhoto = async () => {
     setPhotoError("");
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -94,13 +90,9 @@ export function ProfilePage({
           <Image source={{ uri: photoURL }} style={styles.avatar} />
         ) : (
           <View style={styles.avatar}>
-            <Text style={styles.initials}>{user ? initials : "?"}</Text>
+            <Text style={styles.defaultAvatar}>👤</Text>
           </View>
         )}
-        <Text style={styles.name}>{name}</Text>
-        <Text style={styles.muted}>
-          {user?.email || "Sign in to sell and message"}
-        </Text>
         {user ? (
           <Pressable
             style={({ pressed }) => [
@@ -190,8 +182,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginBottom: 14,
   },
-  initials: { fontSize: 22, color: "#225347", fontWeight: "800" },
-  name: { color: "#173C34", fontSize: 24, fontWeight: "800", marginBottom: 6 },
+  defaultAvatar: { fontSize: 34 },
   muted: { color: "#87918C", fontSize: 12 },
   photoButton: {
     minHeight: 38,

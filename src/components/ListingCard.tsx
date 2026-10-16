@@ -16,7 +16,7 @@ export function ListingCard({
   return (
     <Pressable style={styles.card} onPress={onOpen}>
       <View style={styles.photo}>
-        {item.image ? <Image source={{ uri: item.image }} style={[styles.image, item.status === "sold" && styles.soldImage]} /> : <View style={styles.noImage}><Text style={styles.noImageIcon}>◎</Text><Text style={styles.noImageText}>No photo</Text></View>}
+        {item.image ? <Image resizeMode="contain" source={{ uri: item.image }} style={[styles.image, item.status === "sold" && styles.soldImage]} /> : <View style={styles.noImage}><Text style={styles.noImageIcon}>◎</Text><Text style={styles.noImageText}>No photo</Text></View>}
         {item.status === "sold" ? <SoldBadge /> : null}
         <Text style={[styles.typeBadge, item.listingType === "wanted" && styles.wantedBadge]}>{item.listingType === "wanted" ? "WANTED" : "FOR SALE"}</Text>
         {item.urgent && item.status !== "sold" ? <Text style={styles.urgent}>URGENT</Text> : null}

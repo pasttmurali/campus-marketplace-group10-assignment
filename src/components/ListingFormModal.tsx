@@ -24,7 +24,7 @@ function listingValues(listing?: Listing | null): SellFormValues {
     condition: listing?.condition || "",
     campus: listing?.campus || "",
     description: listing?.description || "",
-    image: listing?.image || "",
+    images: listing?.images?.length ? listing.images : listing?.image ? [listing.image] : [],
     negotiable: listing?.negotiable || false,
     urgent: listing?.urgent || false,
     listingType: listing?.listingType || "selling",
@@ -77,7 +77,7 @@ export function ListingFormModal({ visible, onClose, onSubmit, initialListing, h
         <CampusField value={values.campus} error={errors.campus} disabled={saving} onChange={(value) => update("campus", value)} />
         <ToggleRow label="Urgent sale" value={values.urgent} onChange={(value) => update("urgent", value)} />
         <Field label="Description" value={values.description} error={errors.description} placeholder="Condition, pickup spot, what's included..." multiline onChange={(value) => update("description", value)} />
-        <ListingImagePicker value={values.image} error={errors.image} disabled={saving} onChange={(value) => update("image", value)} />
+        <ListingImagePicker value={values.images} error={errors.images} disabled={saving} onChange={(value) => update("images", value)} />
         {submitError ? <Text style={styles.submitError}>{submitError}</Text> : null}
         <Pressable disabled={saving} onPress={save} style={[styles.primary, saving && styles.disabled]}>{saving ? <ActivityIndicator color="#FFF" /> : <Text style={styles.primaryText}>{submitLabel}</Text>}</Pressable>
       </ScrollView>}

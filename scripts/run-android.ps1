@@ -22,8 +22,21 @@ if (-not (Test-Path -LiteralPath $adb)) {
   exit 1
 }
 
-$deviceLines = & $adb devices 2>&1
+$previousErrorActionPreference = $ErrorActionPreference
+$ErrorActionPreference = "Continue"
+try {
+  $deviceLines = & $adb devices 2>&1
+  $adbExitCode = $LASTEXITCODE
+}
+finally {
+  $ErrorActionPreference = $previousErrorActionPreference
+}
 $deviceLines | Out-Host
+
+if ($adbExitCode -ne 0) {
+  Write-Error "ADB failed with exit code $adbExitCode. Check the Android SDK platform-tools installation."
+  exit $adbExitCode
+}
 
 $connectedDevice = $deviceLines | Select-String -Pattern "\sdevice$"
 if (-not $connectedDevice) {

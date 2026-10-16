@@ -44,7 +44,7 @@ Campus Marketplace is a cross-platform marketplace application for students to d
 
 - Save and unsave listings.
 - Private saved-item collection for each authenticated user.
-- Real-time synchronization with Firestore.
+- Real-time synchronization with Firebase Realtime Database.
 - Dedicated Saved Items page with empty-state guidance.
 
 ### Selling and listing management
@@ -57,12 +57,12 @@ Campus Marketplace is a cross-platform marketplace application for students to d
   - campus;
   - description;
   - optional image URL.
-- Choose a photo from the device or paste a publicly accessible HTTP(S) image URL. Device photos are uploaded to Firebase Storage; the resulting download URL is saved with the listing in Firestore.
+- Choose a photo from the device or paste a publicly accessible HTTP(S) image URL. Device photos are uploaded to Firebase Storage; the resulting download URL is saved with the listing in Realtime Database.
 - Field-level validation before publishing.
 - View all listings owned by the signed-in seller.
 - Edit every listing field through a pre-filled form.
 - Mark an owned listing as sold or available.
-- Ownership validation in both application logic and Firestore rules.
+- Ownership validation in both application logic and Realtime Database rules.
 - Immediate local UI updates after edits or status changes.
 
 ### Seller profiles
@@ -76,7 +76,7 @@ Campus Marketplace is a cross-platform marketplace application for students to d
 ### Buyer–seller messaging
 
 - Create a private conversation for a specific listing.
-- Real-time message delivery using Firestore listeners.
+- Real-time message delivery using Firebase Realtime Database listeners.
 - Buyer/seller-aware participant names and roles.
 - Latest-message preview and conversation timestamps.
 - Message composer with loading and error feedback.
@@ -119,8 +119,8 @@ Campus Marketplace is a cross-platform marketplace application for students to d
 | Web runtime | React DOM and React Native Web | Runs the React Native application in modern browsers |
 | Language | TypeScript 6 | Static typing and safer refactoring |
 | Authentication | Firebase Authentication | Google Sign-In and authenticated user sessions |
-| Database | Cloud Firestore Enterprise (Native mode) | Listings, profiles, saved items, conversations, and real-time messages |
-| File storage | Firebase Storage | User profile and listing photos; Firestore stores their download URLs |
+| Database | Firebase Realtime Database | Listings, profiles, saved items, conversations, and real-time messages |
+| File storage | Firebase Storage | Stores user profile and listing photos; Realtime Database stores their download URLs |
 | OAuth support | Expo Auth Session and Expo Web Browser | Google OAuth flows across web and native platforms |
 | Media selection | Expo Image Picker | Selects profile and listing photos from a device |
 | Testing | Node test runner through TSX | Automated listing-filter tests |
@@ -136,7 +136,7 @@ src/
   utils/                  Listing search, filtering, validation, and sorting
   App.tsx                 Application state, navigation, authentication, and orchestration
   data.ts                 Demonstration listings and categories
-  firebase.ts             Firebase app, Auth, Firestore, and Storage initialization
+  firebase.ts             Firebase app, Auth, Realtime Database, and Storage initialization
   listings.ts             Listing normalization, ownership, updates, and status operations
   messages.ts             Real-time subscriptions and message create/edit/delete operations
   types.ts                Shared listing, conversation, message, and navigation types
@@ -144,8 +144,7 @@ tests/
   filterListings.test.mjs Automated filter and sorting tests
 scripts/
   run-android.ps1         Windows Android development helper
-firestore.rules           Firestore authorization and data validation
-firestore.indexes.json    Firestore index configuration
+database.rules.json       Realtime Database authorization and data validation
 storage.rules             Profile-photo storage authorization
 ```
 
@@ -156,21 +155,21 @@ storage.rules             Profile-photo storage authorization
 | Setting | Value |
 | --- | --- |
 | Firebase project | `campus-marketplace-2026-3f910` |
-| Firestore database | `campus-marketplace-db` |
-| Firestore edition | Enterprise, Native mode |
-| Region | `asia-south1` |
+| Database | Firebase Realtime Database |
 | Real-time updates | Enabled |
 | Android package | `com.nsayoo.campusmarketplace` |
 
-The application explicitly connects to the named `campus-marketplace-db` database in `src/firebase.ts`.
+The application connects to the Realtime Database URL supplied through `EXPO_PUBLIC_FIREBASE_DATABASE_URL` in `src/firebase.ts`.
 
-### Firestore data model
+### Realtime Database data model
 
 ```text
 users/{uid}
   saved/{listingId}
 
 listings/{listingId}
+
+userConversations/{uid}/{conversationId}
 
 conversations/{conversationId}
   messages/{messageId}
@@ -179,10 +178,11 @@ conversations/{conversationId}
 - `users/{uid}` stores the signed-in user's private profile.
 - `users/{uid}/saved/{listingId}` stores that user's private saved listings.
 - `listings/{listingId}` stores authenticated marketplace listings and ownership details.
+- `userConversations/{uid}` indexes conversations for each participant.
 - `conversations/{conversationId}` stores listing context, participants, and latest-message preview.
 - `conversations/{conversationId}/messages/{messageId}` stores participant-only messages, edit timestamps, and deletion timestamps.
 
-Firestore rules enforce authentication, listing ownership, conversation membership, message ownership, allowed fields, value types, text lengths, URLs, and recent server timestamps. Message deletion is a protected soft deletion so conversation history remains understandable.
+Realtime Database rules in `database.rules.json` enforce authentication, listing ownership, conversation membership, message ownership, and message text limits. Deploy them with `npx.cmd firebase deploy --only database`. Message deletion is a protected soft deletion so conversation history remains understandable.
 
 ## Getting Started
 
@@ -212,6 +212,7 @@ EXPO_PUBLIC_FIREBASE_PROJECT_ID=
 EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET=
 EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=
 EXPO_PUBLIC_FIREBASE_APP_ID=
+EXPO_PUBLIC_FIREBASE_DATABASE_URL=
 EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID=
 EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID=
 EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID=
@@ -267,11 +268,11 @@ Run strict TypeScript validation:
 npx.cmd tsc --noEmit
 ```
 
-Validate and deploy Firebase rules after a rule change:
+Deploy Realtime Database rules after a rule change:
 
 ```powershell
 $env:NODE_OPTIONS="--use-system-ca"
-firebase deploy --only firestore:rules --project campus-marketplace-2026-3f910
+firebase deploy --only database
 ```
 
 ## Demonstration Flow
@@ -314,11 +315,11 @@ firebase deploy --only firestore:rules --project campus-marketplace-2026-3f910
 - For Android, verify the package, OAuth client, and SHA-1 configuration.
 - Restart Expo after changing environment values.
 
-### Firestore data is unavailable
+### Live Firebase data is unavailable
 
-- Confirm the project ID and named database are correct.
+- Confirm the project ID and Realtime Database URL belong to the same Firebase project.
 - Confirm the user is signed in for live data.
-- Deploy the included Firestore rules after changing them.
+- Deploy the included Realtime Database rules after changing them.
 - Check the browser console for permission errors.
 
 ### Android device is unavailable

@@ -72,11 +72,6 @@ export function ExplorePage({
             userEmail ? `Open profile for ${userEmail}` : "Open profile"
           }
         >
-          {userEmail ? (
-            <Text style={styles.accountEmail} numberOfLines={1}>
-              {userEmail}
-            </Text>
-          ) : null}
           <View style={styles.avatar}>
             {userPhotoURL ? (
               <Image
@@ -245,15 +240,7 @@ const styles = StyleSheet.create({
   heroCopy: { flex: 1 },
   account: {
     alignItems: "center",
-    flexDirection: "row",
-    gap: 8,
     marginLeft: 12,
-  },
-  accountEmail: {
-    color: "#49635A",
-    fontSize: 12,
-    fontWeight: "600",
-    maxWidth: 110,
   },
   avatar: {
     width: 42,
