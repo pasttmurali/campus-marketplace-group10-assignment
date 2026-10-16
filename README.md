@@ -51,7 +51,7 @@ A cross-platform marketplace for university students to discover, buy, and sell 
 | **Project** | Campus Marketplace |
 | **Course** | Emerging Trends |
 | **Final integration branch** | `integration-testing` |
-| **Platforms** | Web , IOS and Android |
+| **Platforms** | Web and Android |
 | **Assignment submission deadline** | 19 October 2026 |
 
 ## Features
@@ -65,19 +65,28 @@ A cross-platform marketplace for university students to discover, buy, and sell 
 - **Buyer–seller messaging:** Start listing-related conversations and exchange messages in real time.
 - **Responsive interface:** Browse listings and manage marketplace actions on web and Android.
 
-## Group members and feature ownership
+## Group members and verified collaboration
 
-Each member leads a related feature area and contributes through implementation, tests, review, and integration. Feature leads should coordinate changes that touch shared files, especially `src/App.tsx`, before coding in parallel.
+The following contribution summary is based on the feature branches and commits integrated between `master` and `integration-testing`. It records the main implementation delivered by each member while recognising that shared files, reviews, conflict resolution, testing, and final integration were collaborative work.
 
-| Student | Registration number | Feature ownership |
-| --- | --- | --- |
-| Nahananthiny Gnanakrishnabalasingham | 2023CSC080 | Marketplace discovery: search, category filters, minimum/maximum price filters, sorting, filter validation, and related tests. |
-| Abilasha Arunthavakumar | 2023CSC007 | Listing lifecycle: mark as sold/available, negotiable and urgent options, listing edit flow, and related form validation. |
-| Rukshika Sithmini | 2023CSC071 | Student and seller profiles: profile/listing presentation, profile-photo updates, seller listings, and saved-listing experience. |
-| Thayaparan Kavishan | 2023CSC069 | Seller workflow: create sale listings, listing details and presentation, listing-photo selection/upload, and listing-card photo count. |
-| Tharmapala Muralitharan | 2023CSC090 | Buyer/authentication flow: wanted-item posts, Google sign-in/login, buyer–seller messaging, and final integration/testing on `integration-testing`. |
+| Student | Registration number | Verified contribution on `integration-testing` | Feature branch / category |
+| --- | --- | --- | --- |
+| Nahananthiny Gnanakrishnabalasingham | 2023CSC080 | Implemented marketplace discovery logic and UI for keyword search, category selection, minimum/maximum price filters, sorting, reset behaviour, invalid-range validation, and automated filter tests. | `price-filter` / Discovery and filtering |
+| Abilasha Arunthavakumar | 2023CSC007 | Implemented the listing-management lifecycle: listing edit modal, update persistence, mark-as-sold/available behaviour, sold-state presentation, and the sold badge. | `mark-as-sold` / Listing lifecycle management |
+| Rukshika Sithmini | 2023CSC071 | Implemented seller profiles, navigation from listing details to a seller profile, seller identity and campus presentation, the seller's active-listing collection, save/open actions, and the contact-seller path from the profile. | `seller-profile` / Seller profile experience |
+| Thayaparan Kavishan | 2023CSC069 | Implemented the reusable seller listing form and its integration into the app, including title, positive-price, category, condition, campus, description, and optional image-URL validation with inline validation feedback. | `listing-validation` / Seller form and validation |
+| Tharmapalamuralitharan | 2023CSC090 | Implemented Google and email/password Firebase authentication, account creation and password reset; signed-in profile and marketplace persistence; editable profile photos and phone-number validation; seller calling; Sri Lankan/custom campus selection; real-time listing-linked buyer–seller chat with message edit/delete; complete listing editing and own-listing deletion; back navigation/history; wanted-item lifecycle, saved-listing, negotiable and urgent flows; multi-photo selection, URL validation, image optimization, Firebase Storage upload and photo count; expanded live/demo inventory; Firebase Realtime Database integration and rules; and final merge, conflict resolution, validation, documentation, and integration testing. | `google-auth`, `feature/explore-user-profile`, `feature/editable-profile-photo`, `feature/seller-buyer-messaging`, `feature/message-edit-delete`, `feature/profile-listing-enhancements`, `feature/all-marketplace-features` / Authentication, profiles, messaging, media, persistence and final integration |
 
-Feature ownership identifies the lead, not an exclusive contribution. All members should review and test the integrated application and make meaningful, attributable commits.
+Feature ownership identifies the primary implementation evidenced in Git history, not exclusive ownership of an area. All members participated in review and testing of the integrated application, while the integration lead coordinated shared-file merges and final validation on `integration-testing`.
+
+### Integrated feature categories added beyond `master`
+
+- **Discovery:** keyword search, category filtering, minimum/maximum price filtering, sorting, reset behaviour, validation, and tests.
+- **Listing creation and lifecycle:** validated seller form, sale and wanted-item posts, complete listing editing and deletion, negotiable/urgent options, sold/available status, and found/still-needed status for wanted posts.
+- **Profiles and saved activity:** signed-in student profile, seller profiles and listings, editable profile photos, validated phone numbers, seller calling, Sri Lankan/custom campus selection, and saved listings.
+- **Authentication and communication:** Firebase Google and email/password sign-in, account creation, password reset, listing-linked real-time conversations, and message edit/delete actions.
+- **Images and persistence:** up-to-three-photo selection, image URL validation and optimization, Firebase Storage uploads, photo-count display, Realtime Database persistence, and database/storage rules.
+- **Navigation and integration quality:** page history/back navigation, expanded live/demo data, automated validation, conflict resolution, final integration testing, and documentation.
 
 ## Technology
 
@@ -263,4 +272,3 @@ Restart Expo with `npx.cmd expo start --web --clear` and hard-refresh the browse
 ## License
 
 See [LICENSE](LICENSE) for the project license.
-
