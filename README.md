@@ -51,7 +51,7 @@ A cross-platform marketplace for university students to discover, buy, and sell 
 | **Project** | Campus Marketplace |
 | **Course** | Emerging Trends |
 | **Final integration branch** | `integration-testing` |
-| **Platforms** | Web and Android |
+| **Platforms** | Web, IOS and Android |
 | **Assignment submission deadline** | 19 October 2026 |
 
 ## Features
