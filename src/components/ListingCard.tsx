@@ -13,12 +13,15 @@ export function ListingCard({
   onSave: () => void;
   onOpen: () => void;
 }) {
+  const photoCount = item.images?.length || (item.image ? 1 : 0);
+
   return (
     <Pressable style={styles.card} onPress={onOpen}>
       <View style={styles.photo}>
         {item.image ? <Image resizeMode="contain" source={{ uri: item.image }} style={[styles.image, item.status === "sold" && styles.soldImage]} /> : <View style={styles.noImage}><Text style={styles.noImageIcon}>◎</Text><Text style={styles.noImageText}>No photo</Text></View>}
         {item.status === "sold" ? <SoldBadge /> : null}
         <Text style={[styles.typeBadge, item.listingType === "wanted" && styles.wantedBadge]}>{item.listingType === "wanted" ? "WANTED" : "FOR SALE"}</Text>
+        {photoCount > 1 ? <Text accessibilityLabel={`Photo 1 of ${photoCount}`} style={styles.photoCount}>1/{photoCount}</Text> : null}
         {item.urgent && item.status !== "sold" ? <Text style={styles.urgent}>URGENT</Text> : null}
         <Pressable
           accessibilityLabel={saved ? "Remove saved item" : "Save item"}
@@ -77,6 +80,7 @@ const styles = StyleSheet.create({
   urgent: { backgroundColor: "#C3535B", borderRadius: 6, color: "#FFF", fontSize: 9, fontWeight: "900", left: 9, overflow: "hidden", paddingHorizontal: 7, paddingVertical: 4, position: "absolute", top: 10 },
   typeBadge: { backgroundColor: "#1F5D4C", borderRadius: 6, bottom: 9, color: "#FFF", fontSize: 9, fontWeight: "900", left: 9, overflow: "hidden", paddingHorizontal: 7, paddingVertical: 4, position: "absolute" },
   wantedBadge: { backgroundColor: "#3567A8" },
+  photoCount: { backgroundColor: "rgba(0,0,0,.65)", borderRadius: 6, bottom: 9, color: "#FFF", fontSize: 10, fontWeight: "800", overflow: "hidden", paddingHorizontal: 7, paddingVertical: 4, position: "absolute", right: 9 },
   body: { padding: 12 },
   row: { flexDirection: "row", justifyContent: "space-between", gap: 5 },
   title: {
