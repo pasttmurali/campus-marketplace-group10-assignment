@@ -1,4 +1,4 @@
-# Campus Marketplace — Student Group Assignment
+# Campus Marketplace — Group 13
 
 A cross-platform marketplace for university students to discover, buy, and sell items within their campus community. This team project extends the existing Campus Marketplace application with listing discovery and management, student profiles, authentication, wanted-item posts, and buyer–seller communication.
 
@@ -63,8 +63,8 @@ Feature ownership identifies the lead, not an exclusive contribution. All member
 From PowerShell:
 
 ```powershell
-git clone https://github.com/pasttmurali/campus-marketplace-group10-assignment.git
-Set-Location campus-marketplace-group10-assignment
+git clone https://github.com/pasttmurali/campus-marketplace-group13-Assignment.git
+Set-Location campus-marketplace-group13-Assignment
 Copy-Item .env.example .env
 npm.cmd install
 ```
