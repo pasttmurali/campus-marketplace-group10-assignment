@@ -1,209 +1,75 @@
-# Campus Marketplace — Group 10
+# Campus Marketplace — Student Group Assignment
 
-Campus Marketplace is a cross-platform marketplace application for students to discover, buy, and sell items within their campus community. It includes authenticated listing management, saved items, seller profiles, and secure real-time buyer–seller messaging.
+A cross-platform marketplace for university students to discover, buy, and sell items within their campus community. This team project extends the existing Campus Marketplace application with listing discovery and management, student profiles, authentication, wanted-item posts, and buyer–seller communication.
 
-## Contents
+## Project overview
 
-- [Implemented Features](#implemented-features)
-- [Technology Stack](#technology-stack)
-- [Application Structure](#application-structure)
-- [Firebase Architecture](#firebase-architecture)
-- [Getting Started](#getting-started)
-- [Running the Application](#running-the-application)
-- [Testing and Validation](#testing-and-validation)
-- [Demonstration Flow](#demonstration-flow)
-- [Git Workflow](#git-workflow)
-- [Troubleshooting](#troubleshooting)
-
-## Implemented Features
-
-### Authentication and user profiles
-
-- Google Sign-In through Firebase Authentication.
-- Persistent browser authentication sessions.
-- Web popup authentication with redirect fallback.
-- Native Google authentication support for development builds.
-- Signed-in user name, email, and profile state.
-- Editable profile photo selected from the device gallery.
-- Profile photo upload through Firebase Storage.
-- Listing photos selected from the device gallery and saved to Firebase Storage.
-- Secure sign-out.
-
-### Marketplace discovery
-
-- Explore a collection of campus listings.
-- Display both demonstration listings and authenticated live listings without duplicates.
-- Search by listing title, description, seller, campus, or category.
-- Filter by category and minimum/maximum price.
-- Sort by newest, price low-to-high, or price high-to-low.
-- Reset active filters.
-- Responsive two-column listing grid and detailed listing modal.
-- Sold-item badges and disabled seller contact for sold items.
-
-### Saved items
-
-- Save and unsave listings.
-- Private saved-item collection for each authenticated user.
-- Real-time synchronization with Firebase Realtime Database.
-- Dedicated Saved Items page with empty-state guidance.
-
-### Selling and listing management
-
-- Publish a listing with:
-  - title;
-  - price;
-  - category;
-  - condition;
-  - campus;
-  - description;
-  - optional image URL.
-- Choose a photo from the device or paste a publicly accessible HTTP(S) image URL. Device photos are uploaded to Firebase Storage; the resulting download URL is saved with the listing in Realtime Database.
-- Field-level validation before publishing.
-- View all listings owned by the signed-in seller.
-- Edit every listing field through a pre-filled form.
-- Mark an owned listing as sold or available.
-- Ownership validation in both application logic and Realtime Database rules.
-- Immediate local UI updates after edits or status changes.
-
-### Seller profiles
-
-- Open a seller profile from any listing.
-- Display seller name, campus, verification status, and active-listing count.
-- Browse all listings belonging to the selected seller.
-- Start a conversation directly from the seller profile.
-- Return to the original listing using contextual back navigation.
-
-### Buyer–seller messaging
-
-- Create a private conversation for a specific listing.
-- Real-time message delivery using Firebase Realtime Database listeners.
-- Buyer/seller-aware participant names and roles.
-- Latest-message preview and conversation timestamps.
-- Message composer with loading and error feedback.
-- Tap or long-press an owned message to show actions.
-- Edit an owned message and display an `edited` indicator.
-- Delete an owned message for both participants using a `This message was deleted` placeholder.
-- Update the conversation preview when the latest message is edited or deleted.
-- Prevent users from editing or deleting another participant's messages.
-- Campus meetup safety reminder inside each conversation.
-
-### Navigation and user experience
-
-- Bottom navigation for Explore, Saved, Messages, Profile, and Sell.
-- Consistent back buttons on secondary pages.
-- Page-history navigation that returns to the previous screen.
-- Separate back navigation from a message thread to the inbox.
-- Close controls for listing, authentication, selling, and editing modals.
-- Loading, success, validation, error, and empty states.
-
-### Access requirements
-
-| Action | Sign-in required |
+| | |
 | --- | --- |
-| Browse, search, filter, and sort demo listings | No |
-| Open listing and seller details | No |
-| Load authenticated live marketplace data | Yes |
-| Save or unsave a listing | Yes |
-| Publish or edit a listing | Yes |
-| Mark an owned listing as sold/available | Yes |
-| Start a seller conversation | Yes |
-| Send, edit, or delete a message | Yes |
-| Upload a profile photo | Yes |
+| **Project** | Campus Marketplace |
+| **Course** | Emerging Trends |
+| **Final integration branch** | `integration-testing` |
+| **Platforms** | Web and Android |
+| **Assignment submission deadline** | 19 October 2026 |
 
-## Technology Stack
+## Features
 
-| Area | Technology | Purpose |
+- **Discover listings:** Search listings, filter by category and minimum/maximum price, sort results, and reset filters.
+- **Create and manage listings:** Publish a sale or wanted-item post, add up to three photos, edit a listing, and mark it sold or available.
+- **Listing options:** Set a price as negotiable and mark a listing as urgent.
+- **Student profiles:** View and update a profile, upload a profile photo, open seller profiles, and browse a seller's listings.
+- **Google sign-in:** Authenticate with Firebase Authentication and Google.
+- **Saved listings:** Save and unsave listings for the signed-in user.
+- **Buyer–seller messaging:** Start listing-related conversations and exchange messages in real time.
+- **Responsive interface:** Browse listings and manage marketplace actions on web and Android.
+
+## Group members and feature ownership
+
+Each member leads a related feature area and contributes through implementation, tests, review, and integration. Feature leads should coordinate changes that touch shared files, especially `src/App.tsx`, before coding in parallel.
+
+| Student | Registration number | Feature ownership |
 | --- | --- | --- |
-| Application framework | Expo SDK 57 | Cross-platform development, bundling, and development tools |
-| UI | React 19.2 and React Native 0.86 | Component-based mobile and web interface |
-| Web runtime | React DOM and React Native Web | Runs the React Native application in modern browsers |
-| Language | TypeScript 6 | Static typing and safer refactoring |
-| Authentication | Firebase Authentication | Google Sign-In and authenticated user sessions |
-| Database | Firebase Realtime Database | Listings, profiles, saved items, conversations, and real-time messages |
-| File storage | Firebase Storage | Stores user profile and listing photos; Realtime Database stores their download URLs |
-| OAuth support | Expo Auth Session and Expo Web Browser | Google OAuth flows across web and native platforms |
-| Media selection | Expo Image Picker | Selects profile and listing photos from a device |
-| Testing | Node test runner through TSX | Automated listing-filter tests |
-| Package management | Node.js and npm | Dependency and script management |
-| Version control | Git and GitHub | Feature branches and integration workflow |
+| Nahananthiny Gnanakrishnabalasingham | 2023CSC080 | Marketplace discovery: search, category filters, minimum/maximum price filters, sorting, filter validation, and related tests. |
+| Abilasha Arunthavakumar | 2023CSC007 | Listing lifecycle: mark as sold/available, negotiable and urgent options, listing edit flow, and related form validation. |
+| Rukshika Sithmini | 2023CSC071 | Student and seller profiles: profile/listing presentation, profile-photo updates, seller listings, and saved-listing experience. |
+| Thayaparan Kavishan | 2023CSC069 | Seller workflow: create sale listings, listing details and presentation, listing-photo selection/upload, and listing-card photo count. |
+| Tharmapalamuralitharan | 2023CSC090 | Buyer/authentication flow: wanted-item posts, Google sign-in/login, buyer–seller messaging, and final integration/testing on `integration-testing`. |
 
-## Application Structure
+Feature ownership identifies the lead, not an exclusive contribution. All members should review and test the integrated application and make meaningful, attributable commits.
 
-```text
-src/
-  components/             Reusable cards, forms, headers, states, and controls
-  pages/                  Explore, Saved, Messages, Profile, My Listings, Seller Profile
-  utils/                  Listing search, filtering, validation, and sorting
-  App.tsx                 Application state, navigation, authentication, and orchestration
-  data.ts                 Demonstration listings and categories
-  firebase.ts             Firebase app, Auth, Realtime Database, and Storage initialization
-  listings.ts             Listing normalization, ownership, updates, and status operations
-  messages.ts             Real-time subscriptions and message create/edit/delete operations
-  types.ts                Shared listing, conversation, message, and navigation types
-tests/
-  filterListings.test.mjs Automated filter and sorting tests
-scripts/
-  run-android.ps1         Windows Android development helper
-database.rules.json       Realtime Database authorization and data validation
-storage.rules             Profile-photo storage authorization
-```
+## Technology
 
-## Firebase Architecture
-
-### Project configuration
-
-| Setting | Value |
+| Area | Technology |
 | --- | --- |
-| Firebase project | `campus-marketplace-2026-3f910` |
-| Database | Firebase Realtime Database |
-| Real-time updates | Enabled |
-| Android package | `com.nsayoo.campusmarketplace` |
+| Application | Expo SDK 57, React 19, React Native 0.86 |
+| Language | TypeScript 6 |
+| Web support | React DOM and React Native Web |
+| Authentication | Firebase Authentication and Google sign-in |
+| Data | Firebase Realtime Database |
+| Image storage | Firebase Storage |
+| Media selection | Expo Image Picker and Expo Image Manipulator |
+| Tests | Node.js test runner through `tsx` |
+| Source control | Git and GitHub |
 
-The application connects to the Realtime Database URL supplied through `EXPO_PUBLIC_FIREBASE_DATABASE_URL` in `src/firebase.ts`.
+## Requirements
 
-### Realtime Database data model
+- Node.js 22.13 or newer and npm.
+- A modern browser to run the web version.
+- For Android: Android Studio/SDK, ADB, and an authorized device or emulator.
+- A configured Firebase project for sign-in and live marketplace features.
 
-```text
-users/{uid}
-  saved/{listingId}
+## Setup
 
-listings/{listingId}
-
-userConversations/{uid}/{conversationId}
-
-conversations/{conversationId}
-  messages/{messageId}
-```
-
-- `users/{uid}` stores the signed-in user's private profile.
-- `users/{uid}/saved/{listingId}` stores that user's private saved listings.
-- `listings/{listingId}` stores authenticated marketplace listings and ownership details.
-- `userConversations/{uid}` indexes conversations for each participant.
-- `conversations/{conversationId}` stores listing context, participants, and latest-message preview.
-- `conversations/{conversationId}/messages/{messageId}` stores participant-only messages, edit timestamps, and deletion timestamps.
-
-Realtime Database rules in `database.rules.json` enforce authentication, listing ownership, conversation membership, message ownership, and message text limits. Deploy them with `npx.cmd firebase deploy --only database`. Message deletion is a protected soft deletion so conversation history remains understandable.
-
-## Getting Started
-
-### Requirements
-
-- Node.js 22.13 or newer.
-- npm.
-- A modern browser for the web build.
-- Android Studio/SDK and an authorized device or emulator for Android.
-- Access to the configured Firebase project for live backend features.
-
-### Installation
+From PowerShell:
 
 ```powershell
 git clone https://github.com/pasttmurali/campus-marketplace-group10-assignment.git
-cd campus-marketplace-group10-assignment
+Set-Location campus-marketplace-group10-assignment
 Copy-Item .env.example .env
 npm.cmd install
 ```
 
-Configure `.env` with values from the same Firebase project:
+Fill in `.env` with web app and OAuth client values from the same Firebase/Google Cloud project:
 
 ```dotenv
 EXPO_PUBLIC_FIREBASE_API_KEY=
@@ -218,9 +84,11 @@ EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID=
 EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID=
 ```
 
-Enable Google under **Firebase Console → Authentication → Sign-in method**. Never commit `.env`, service-account files, tokens, or private credentials.
+In Firebase Console, enable **Authentication → Sign-in method → Google** and configure the required authorized domains and OAuth clients. For native Android Google authentication, use a development build and configure the Android package and signing certificate with the Firebase project. Expo Go does not provide the native Google sign-in setup used by this project.
 
-## Running the Application
+Do not commit `.env`, service-account credentials, private keys, or other secrets. The repository ignores local Firebase service configuration files.
+
+## Run the application
 
 ### Web
 
@@ -228,23 +96,28 @@ Enable Google under **Firebase Console → Authentication → Sign-in method**. 
 npm.cmd run web
 ```
 
-Expo normally serves the application at `http://localhost:8081`.
-
-If the browser displays an older bundle after switching branches:
+Open the local URL printed by Expo (normally `http://localhost:8081`). To clear a stale development bundle:
 
 ```powershell
 npx.cmd expo start --web --clear
 ```
 
-Then hard-refresh the browser with `Ctrl+Shift+R`.
-
 ### Android on Windows
 
-```powershell
-npm.cmd run android:windows
-```
+1. Enable USB debugging on the device and connect it, or start an Android emulator.
+2. Confirm ADB can see the device:
 
-Enable USB debugging, connect the device, accept its authorization prompt, and confirm `adb devices` reports `device`. Native Google authentication requires a development build rather than Expo Go.
+   ```powershell
+   adb devices
+   ```
+
+3. Run the project helper:
+
+   ```powershell
+   npm.cmd run android:windows
+   ```
+
+The helper uses the local Android/Gradle setup. Native Google sign-in requires a development build with valid Firebase and OAuth configuration.
 
 ### Other Expo commands
 
@@ -254,87 +127,96 @@ npm.cmd run android
 npm.cmd run ios
 ```
 
-## Testing and Validation
+## Test and validate
 
-Run automated tests:
+Run the automated tests:
 
 ```powershell
 npm.cmd test
 ```
 
-Run strict TypeScript validation:
+Run the TypeScript check:
 
 ```powershell
 npx.cmd tsc --noEmit
 ```
 
-Deploy Realtime Database rules after a rule change:
+Run both checks before opening or approving a feature merge. If Firebase database rules are changed, review them and deploy to the configured Firebase project using the Firebase CLI:
 
 ```powershell
-$env:NODE_OPTIONS="--use-system-ca"
 firebase deploy --only database
 ```
 
-## Demonstration Flow
+## Firebase data overview
 
-1. Start the web application and browse the demonstration inventory.
-2. Search, select a category, set a price range, and change the sort order.
-3. Sign in with Google from the Profile page.
-4. Add or update the profile photo.
-5. Publish a listing with all required details.
-6. Open My Listings, edit every field, and change its sold/available status.
-7. Save another listing and confirm it appears on the Saved page.
-8. Open another user's listing or seller profile and start a conversation.
-9. Send a message, tap it, edit it, and then delete it.
-10. Confirm the other participant sees updates in real time.
-11. Use page back buttons to return through the navigation history.
+The client reads Firebase configuration from `EXPO_PUBLIC_*` environment variables. The main Realtime Database paths are:
 
-## Git Workflow
+```text
+users/{uid}
+  saved/{listingId}
+userConversations/{uid}/{conversationId}
+listings/{listingId}
+conversations/{conversationId}
+  messages/{messageId}
+```
 
-- Stable development branch: `integration-testing`.
-- New work is created in a focused `feature/*` branch.
-- Feature commits use descriptive conventional messages such as `feat(messages): ...` or `fix(listings): ...`.
-- Run tests and TypeScript validation before merging.
-- Merge into `integration-testing` only after conflicts and validation errors are resolved.
-- Keep unrelated local changes out of feature commits unless they are intentionally included.
+Realtime Database rules are maintained in `database.rules.json`; Storage rules are maintained in `storage.rules`. Review the selected Firebase project and rules before deploying. The app also includes demonstration listings for browsing without a signed-in account; live account-specific actions require Firebase configuration and sign-in.
+
+## Team Git and integration workflow
+
+1. `integration-testing` is the team's final integration branch. **Tharmapalan (2023CSC090)** coordinates final integration and validation on this branch.
+2. Each feature lead creates a focused branch from the latest `integration-testing`, for example:
+
+   ```powershell
+   git switch integration-testing
+   git pull origin integration-testing
+   git switch -c feature/2023csc080-price-filters
+   ```
+
+3. Commit only the work for that feature with a clear message, for example:
+
+   ```powershell
+   git add src tests
+   git commit -m "feat(filters): add minimum and maximum price filters"
+   git push -u origin feature/2023csc080-price-filters
+   ```
+
+4. Open a pull request targeting `integration-testing`. Ask another member to review it; coordinate early if the change touches shared files such as `src/App.tsx`.
+5. The integration lead resolves conflicts with the feature author, merges reviewed work into `integration-testing`, and runs `npm.cmd test` and `npx.cmd tsc --noEmit` after integration.
+6. Confirm the final commit is pushed to `origin/integration-testing`. Do not force-push or silently overwrite another member's work.
+
+Use a separate branch and commit for each member's contribution so the GitHub history clearly shows individual work and collaboration.
+
+## Video demonstration
+
+The assignment requests a 5–8 minute recorded demonstration covering the group, problem, features, live app, technology/team workflow, and GitHub contributions. The detailed timed script and presenter hand-offs are in the local-only `VIDEO_DEMO_SCRIPT.md` document; it is intentionally excluded from Git and is not part of the repository submission.
 
 ## Troubleshooting
 
-### Message actions do not appear
+### Google sign-in does not work
 
-- Confirm the running checkout includes the latest `integration-testing` commit.
-- Restart Expo with `npx.cmd expo start --web --clear`.
-- Hard-refresh the browser.
-- Tap or long-press a message sent by the current user; another user's message cannot be changed.
+- Check that Google is enabled as a Firebase Authentication provider.
+- Confirm all `.env` values belong to the same Firebase project.
+- Add the web origin to the authorized OAuth domains.
+- For Android, verify the package name, OAuth client, and signing certificate fingerprints.
+- Restart Expo after editing `.env`. Use an Android development build for native sign-in.
 
-### Google Sign-In fails
+### Live listings or messaging are unavailable
 
-- Confirm every `.env` value belongs to the same Firebase project.
-- Confirm Google Sign-In is enabled in Firebase Authentication.
-- Add the local origin to the authorized OAuth origins.
-- For Android, verify the package, OAuth client, and SHA-1 configuration.
-- Restart Expo after changing environment values.
+- Sign in for account-specific data and actions.
+- Verify the Firebase project ID and Realtime Database URL.
+- Check that the database and Storage rules are deployed to the intended project.
+- Inspect the application console for permission or configuration errors.
 
-### Live Firebase data is unavailable
+### Android device is not detected
 
-- Confirm the project ID and Realtime Database URL belong to the same Firebase project.
-- Confirm the user is signed in for live data.
-- Deploy the included Realtime Database rules after changing them.
-- Check the browser console for permission errors.
+- Accept the USB-debugging authorization prompt.
+- Run `adb devices` and check that the device state is `device`.
+- Start an emulator if no physical device is connected.
 
-### Android device is unavailable
+### A change is missing after switching branches
 
-- Enable USB debugging and accept the device authorization prompt.
-- Run `adb devices` and verify the device state is `device`.
-- Use a development build for native authentication.
-
-## Group Members
-
-| Student | Registration Number | Contribution |
-| --- | --- | --- |
-| Member 1 | Registration number | Contribution |
-| Member 2 | Registration number | Contribution |
-| Member 3 | Registration number | Contribution |
+Restart Expo with `npx.cmd expo start --web --clear` and hard-refresh the browser with `Ctrl+Shift+R`.
 
 ## License
 
