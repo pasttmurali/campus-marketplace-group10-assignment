@@ -23,19 +23,30 @@ A cross-platform marketplace for university students to discover, buy, and sell 
 - **Buyer–seller messaging:** Start listing-related conversations and exchange messages in real time.
 - **Responsive interface:** Browse listings and manage marketplace actions on web and Android.
 
-## Group members and feature ownership
+## Group members and collaboration
 
-Each member leads a related feature area and contributes through implementation, tests, review, and integration. Feature leads should coordinate changes that touch shared files, especially `src/App.tsx`, before coding in parallel.
+The application was completed collaboratively by all five members. The group met together, discussed the requirements and implementation decisions, and developed and tested the integrated features using one shared laptop. Because the shared laptop was configured with the `2023CSC090` Git account, several collaborative commits appear in Git history under that account. The Git author shown for those commits identifies the account used to record the work; it does not mean that one member completed all of those features individually.
 
-| Student | Registration number | Feature ownership |
+| Student | Registration number | Individual branch contribution and team responsibility |
 | --- | --- | --- |
-| Nahananthiny Gnanakrishnabalasingham | 2023CSC080 | Marketplace discovery: search, category filters, minimum/maximum price filters, sorting, filter validation, and related tests. |
-| Abilasha Arunthavakumar | 2023CSC007 | Listing lifecycle: mark as sold/available, negotiable and urgent options, listing edit flow, and related form validation. |
-| Rukshika Sithmini | 2023CSC071 | Student and seller profiles: profile/listing presentation, profile-photo updates, seller listings, and saved-listing experience. |
-| Thayaparan Kavishan | 2023CSC069 | Seller workflow: create sale listings, listing details and presentation, listing-photo selection/upload, and listing-card photo count. |
-| Tharmapalamuralitharan | 2023CSC090 | Buyer/authentication flow: wanted-item posts, Google sign-in/login, buyer–seller messaging, and final integration/testing on `integration-testing`. |
+| Nahananthiny Gnanakrishnabalasingham | 2023CSC080 | Led the `price-filter` work for marketplace discovery, including keyword/category filtering, minimum and maximum prices, sorting, reset behaviour, invalid-range validation, and filter tests. Also participated in group discussion, integrated feature development, review, and testing. |
+| Abilasha Arunthavakumar | 2023CSC007 | Led the `mark-as-sold` work for listing editing, update persistence, sold/available status, sold-state presentation, and the sold badge. Also participated in group discussion, integrated feature development, review, and testing. |
+| Rukshika Sithmini | 2023CSC071 | Led the `seller-profile` work for opening seller profiles from listings, presenting seller details and campus, browsing active seller listings, and continuing to save, open, or contact from that profile. Also participated in group discussion, integrated feature development, review, and testing. |
+| Thayaparan Kavishan | 2023CSC069 | Led the `listing-validation` work for the reusable seller form and validation of title, price, category, condition, campus, description, and optional image URL. Also participated in group discussion, integrated feature development, review, and testing. |
+| Tharmapalamuralitharan | 2023CSC090 | Led the `google-auth` work and coordinated the shared laptop, Git branches, merges, conflict resolution, documentation, and final validation on `integration-testing`. The later commits recorded through this account include features designed, implemented, reviewed, and tested collaboratively by the whole group. |
 
-Feature ownership identifies the lead, not an exclusive contribution. All members should review and test the integrated application and make meaningful, attributable commits.
+### Features completed through group collaboration
+
+Beyond the individually led feature branches above, all members jointly discussed, implemented, reviewed, and tested the following integrated features during group work sessions:
+
+- **Authentication and accounts:** Google sign-in, email/password sign-in, account creation, password reset, and authenticated marketplace access.
+- **Listing creation and lifecycle:** sale and wanted-item posts, complete listing editing and owner deletion, negotiable and urgent options, sold/available status, and found/still-needed status for wanted posts.
+- **Profiles and saved activity:** signed-in student profiles, editable profile photos, phone-number validation, seller calling, Sri Lankan/custom campus selection, and saved listings.
+- **Buyer-seller communication:** listing-linked real-time conversations, message sending and replies, and message edit/delete actions.
+- **Images and persistence:** selection of up to three photos, image URL validation and optimization, Firebase Storage uploads, photo-count display, Realtime Database persistence, and database/storage rules.
+- **Navigation and integration quality:** page history and back navigation, expanded live/demo listings, integration fixes, automated validation, final testing, and documentation.
+
+The feature leads in the table identify focused branch responsibilities. They do not imply exclusive ownership: the final application and the integrated features above are the result of the whole group's collaboration.
 
 ## Technology
 
