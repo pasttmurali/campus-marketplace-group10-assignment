@@ -75,7 +75,7 @@ Each member leads a related feature area and contributes through implementation,
 | Abilasha Arunthavakumar | 2023CSC007 | Listing lifecycle: mark as sold/available, negotiable and urgent options, listing edit flow, and related form validation. |
 | Rukshika Sithmini | 2023CSC071 | Student and seller profiles: profile/listing presentation, profile-photo updates, seller listings, and saved-listing experience. |
 | Thayaparan Kavishan | 2023CSC069 | Seller workflow: create sale listings, listing details and presentation, listing-photo selection/upload, and listing-card photo count. |
-| Tharmapalamuralitharan | 2023CSC090 | Buyer/authentication flow: wanted-item posts, Google sign-in/login, buyer–seller messaging, and final integration/testing on `integration-testing`. |
+| Tharmapala Muralitharan | 2023CSC090 | Buyer/authentication flow: wanted-item posts, Google sign-in/login, buyer–seller messaging, and final integration/testing on `integration-testing`. |
 
 Feature ownership identifies the lead, not an exclusive contribution. All members should review and test the integrated application and make meaningful, attributable commits.
 
